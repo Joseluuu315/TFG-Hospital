@@ -1,4 +1,4 @@
-package com.joseluu.hospital.chatbot;
+package com.joseluu.hospital.manager;
 
 import com.joseluu.hospital.utils.ConfigUtils;
 

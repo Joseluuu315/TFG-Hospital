@@ -1,6 +1,6 @@
 package com.joseluu.hospital;
 
-import com.joseluu.hospital.chatbot.ChatBotManager;
+import com.joseluu.hospital.manager.ChatBotManager;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
