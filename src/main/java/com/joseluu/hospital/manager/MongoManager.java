@@ -14,22 +14,17 @@ public class MongoManager {
     /*
     START CONNECT AND DISCONNECT
      */
-    public boolean startDatabase(){
-        boolean status = false;
-
+    public void startDatabase(){
         try {
             mongoClient = MongoClients.create(ConfigUtils.uriMongo);
             mongoDatabase = mongoClient.getDatabase(ConfigUtils.nameDatabase);
 
             System.out.println("Database conectada sin errores");
 
-            status  = true;
         }catch (Exception e){
+            System.out.println("Database conectada con errores");
             System.out.println(e.getMessage());
-            status = false;
         }
-
-        return status;
     }
 
     public void closeDatabase() {
