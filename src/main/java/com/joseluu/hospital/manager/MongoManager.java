@@ -11,6 +11,9 @@ public class MongoManager {
     MongoClient mongoClient;
     MongoDatabase mongoDatabase;
 
+    /*
+    START CONNECT AND DISCONNECT
+     */
     public boolean startDatabase(){
         boolean status = false;
 
@@ -33,4 +36,8 @@ public class MongoManager {
         mongoClient.close();
         System.out.println("Database cerrada");
     }
+
+    /*
+    FINISH START AND DISCONNECT DATABASE
+     */
 }
