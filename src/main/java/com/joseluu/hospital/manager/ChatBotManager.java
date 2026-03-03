@@ -11,8 +11,6 @@ public class ChatBotManager {
     el asistente 24/7 de los usuarios que usen la app
      */
 
-    private final String prompt = " Hola, eres un bot de chat para la aplicacion de HospitalGest " +
-            "En este hospital hay un servicio de atencion al cliente de lunes a viernes de 9:00 am a 16:00 pm";
 
     public void runChatBot(){
         String tokenIA = ConfigUtils.chatTokens;
