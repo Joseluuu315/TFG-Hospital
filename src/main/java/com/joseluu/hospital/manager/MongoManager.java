@@ -28,4 +28,9 @@ public class MongoManager {
 
         return status;
     }
+
+    public void closeDatabase() {
+        mongoClient.close();
+        System.out.println("Database cerrada");
+    }
 }
