@@ -16,5 +16,12 @@ public class ChatBotManager {
 
     public void runChatBot(){
         String tokenIA = ConfigUtils.chatTokens;
+
+        System.out.println("Bot 24h iniciado con exito");
+    }
+
+    public void stopChatBot() {
+        System.out.println("Bot 24h parado con exito");
+
     }
 }
