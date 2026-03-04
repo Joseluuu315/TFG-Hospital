@@ -8,8 +8,8 @@ import lombok.Getter;
 
 public class MongoManager {
     @Getter
-    MongoClient mongoClient;
-    MongoDatabase mongoDatabase;
+    private MongoClient mongoClient;
+    private MongoDatabase mongoDatabase;
 
     /*
     START CONNECT AND DISCONNECT

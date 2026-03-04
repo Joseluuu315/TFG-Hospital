@@ -14,8 +14,8 @@ Anotaciones obtenidas
  */
 @Component
 public class ShutdownService {
-    private MongoManager mongoManager = new MongoManager();
-    private ChatBotManager chatBotManager = new ChatBotManager();
+    private final MongoManager mongoManager = new MongoManager();
+    private final ChatBotManager chatBotManager = new ChatBotManager();
 
     @PreDestroy
     public void onShutDown (){
