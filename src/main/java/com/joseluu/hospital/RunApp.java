@@ -1,25 +1,17 @@
 package com.joseluu.hospital;
 
-import com.joseluu.hospital.manager.ChatBotManager;
-import com.joseluu.hospital.manager.MongoManager;
-import lombok.Getter;
-import lombok.Setter;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
+/**
+ * Punto de entrada principal de la aplicación Spring Boot.
+ */
 @SpringBootApplication
 public class RunApp {
-    @Getter
-    @Setter
-    public static ChatBotManager chatBotManager = new ChatBotManager();
-    public static MongoManager mongoManager = new MongoManager();
-
+    /**
+     * Arranca el contexto de Spring y expone la API HTTP.
+     */
     public static void main(String[] args) {
-        //Run services
-        chatBotManager.runChatBot();
-        mongoManager.startDatabase();
-
         SpringApplication.run(RunApp.class, args);
     }
-
 }
