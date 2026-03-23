@@ -134,7 +134,7 @@ public class HospitalService {
 
         List<UserDocument> workers = userRepository.findByRole(UserRole.WORKER).stream()
                 .filter(user -> user.getHospitalId().equals(hospitalId))
-                .collect(Collectors.toList());
+                .toList();
 
         for (UserDocument worker : workers) {
             notificationService.createNotification(worker.getId(), NotificationType.NEW_ANNOUNCEMENT, "Nuevo anuncio: " + announcement.getTitle());
