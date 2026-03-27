@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Bell, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupInput, InputGroupAddon } from '@/components/ui/input-group';
+import { MobileSidebar } from '@/components/dashboard/mobile-sidebar';
 
 interface HeaderProps {
   title: string;
@@ -16,12 +17,15 @@ export function Header({ title, description }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
-      <div className="flex h-16 items-center justify-between px-6">
-        <div>
-          <h1 className="text-xl font-semibold">{title}</h1>
-          {description && (
-            <p className="text-sm text-muted-foreground">{description}</p>
-          )}
+      <div className="flex h-16 items-center justify-between px-4 sm:px-6">
+        <div className="flex items-center gap-3">
+          <MobileSidebar />
+          <div>
+            <h1 className="text-xl font-semibold">{title}</h1>
+            {description && (
+              <p className="text-sm text-muted-foreground">{description}</p>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-4">
