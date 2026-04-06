@@ -1,12 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
+import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import { ChatWindow } from '@/components/chat/chat-window';
 import { NewChatDialog } from '@/components/chat/new-chat-dialog';
 import { Button } from '@/components/ui/button';
-import { MessageCircle, Plus, Wifi, WifiOff } from 'lucide-react';
+import { ChevronLeft, MessageCircle, Plus, Wifi, WifiOff } from 'lucide-react';
 import { chatApi, usersApi, type Chat, type ChatMessage, type User } from '@/lib/api';
 
 interface Worker {
@@ -119,7 +121,20 @@ export default function WorkerChatPage() {
   const unreadCount = chats.filter((c) => c.unreadCount > 0).length;
 
   return (
-      <div className="flex min-h-[calc(100vh-4rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:h-[calc(100vh-4rem)]">
+    <DashboardShell
+      title="Mensajes"
+      description="Gestiona tus conversaciones internas."
+    >
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/dashboard/worker">
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              Volver al dashboard
+            </Link>
+          </Button>
+        </div>
+        <div className="flex min-h-[calc(100vh-4rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:h-[calc(100vh-4rem)]">
         {/* Top bar */}
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
           <div className="flex items-center gap-3">
@@ -209,6 +224,7 @@ export default function WorkerChatPage() {
             isAdmin={user?.role === 'HOSPITAL_ADMIN' || user?.role === 'ROOT'}
         />
       </div>
+    </DashboardShell>
   );
 }
 

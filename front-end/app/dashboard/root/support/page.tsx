@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { useAuth } from '@/contexts/auth-context';
+import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import { ChatWindow } from '@/components/chat/chat-window';
 import { Badge } from '@/components/ui/badge';
@@ -85,6 +86,10 @@ export default function RootSupportPage() {
   const resolvedChats = visibleChats.filter((c) => c.unreadCount === 0).length;
 
   return (
+    <DashboardShell
+      title="Soporte"
+      description="Supervisa incidencias y conversaciones con hospitales."
+    >
       <div className="space-y-5">
         {/* Header */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 via-slate-900 to-emerald-950 p-6 text-white shadow-lg">
@@ -169,6 +174,7 @@ export default function RootSupportPage() {
           </div>
         </div>
       </div>
+    </DashboardShell>
   );
 }
 

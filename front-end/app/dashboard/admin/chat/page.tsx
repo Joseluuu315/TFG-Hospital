@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
+import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import { ChatWindow } from '@/components/chat/chat-window';
 import { NewChatDialog } from '@/components/chat/new-chat-dialog';
@@ -11,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MessageCircle, Users, Settings, Plus, Trash2, Zap } from 'lucide-react';
+import { ChevronLeft, MessageCircle, Users, Settings, Plus, Trash2, Zap } from 'lucide-react';
 import { chatApi, usersApi, workGroupsApi, type Chat, type ChatMessage, type User, type WorkGroup } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -181,7 +183,19 @@ export default function AdminChatPage() {
   const unreadChats = chats.filter((c) => c.unreadCount > 0).length;
 
   return (
+    <DashboardShell
+      title="Comunicaciones"
+      description="Gestiona mensajes y grupos del hospital."
+    >
       <div className="space-y-5">
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/dashboard/admin">
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              Volver al dashboard
+            </Link>
+          </Button>
+        </div>
         {/* Header banner */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-cyan-900 p-6 text-white shadow-lg">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(34,211,238,0.15),_transparent_60%)]" />
@@ -429,6 +443,7 @@ export default function AdminChatPage() {
           </DialogContent>
         </Dialog>
       </div>
+    </DashboardShell>
   );
 }
 
