@@ -75,8 +75,8 @@
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --font-sans: var(--font-geist), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -121,5 +121,17 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-image:
+      radial-gradient(1200px 600px at -10% -20%, rgba(56, 189, 248, 0.15), transparent 60%),
+      radial-gradient(900px 500px at 110% 10%, rgba(34, 197, 94, 0.12), transparent 55%),
+      radial-gradient(700px 400px at 50% 120%, rgba(251, 191, 36, 0.1), transparent 55%);
+    background-attachment: fixed;
   }
+}
+
+.dark body {
+  background-image:
+    radial-gradient(1200px 600px at -10% -20%, rgba(56, 189, 248, 0.08), transparent 60%),
+    radial-gradient(900px 500px at 110% 10%, rgba(34, 197, 94, 0.08), transparent 55%),
+    radial-gradient(700px 400px at 50% 120%, rgba(251, 191, 36, 0.06), transparent 55%);
 }

@@ -4,8 +4,8 @@ import { AuthProvider } from '@/contexts/auth-context'
 import { Toaster } from 'sonner'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const geist = Geist({ subsets: ['latin'], variable: '--font-geist' });
+const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' });
 
 export const metadata: Metadata = {
   title: 'HospiGest - Trassierra',
@@ -36,8 +36,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body className="font-sans antialiased">
+    <html lang="es">
+      <body className={`${geist.variable} ${geistMono.variable} font-sans antialiased`}>
         <AuthProvider>
           {children}
           <Toaster position="top-right" richColors />

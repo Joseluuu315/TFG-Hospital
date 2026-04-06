@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Building2, LogOut, Settings } from 'lucide-react';
 import { getRoleLabel, navItems } from '@/components/dashboard/nav-items';
+import { getDisplayName, getInitials } from '@/lib/formatters';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -14,10 +15,11 @@ export function Sidebar() {
 
   const filteredItems = navItems.filter((item) => hasRole(item.roles));
 
-  const u = user as any;
-  const fullName = `${u?.firstName ?? u?.nombre ?? ''} ${u?.lastName ?? u?.apellidos ?? ''}`.trim();
-  const initial = (u?.firstName?.[0] ?? u?.nombre?.[0] ?? '?').toUpperCase();
-  const avatarUrl = u?.imageURL ?? u?.avatar ?? null;
+  const fullName = getDisplayName(user);
+  const initial = getInitials(user);
+  const avatarUrl = (user as { imageURL?: string; avatar?: string } | null)?.imageURL
+    ?? (user as { imageURL?: string; avatar?: string } | null)?.avatar
+    ?? null;
 
   return (
       <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 border-r bg-sidebar text-sidebar-foreground md:flex">
@@ -79,7 +81,7 @@ export function Sidebar() {
               </div>
 
               <div className="flex-1 min-w-0">
-                <p className="truncate text-sm font-medium">{fullName}</p>
+                <p className="truncate text-sm font-medium">{fullName || 'Usuario'}</p>
                 <p className="truncate text-xs text-sidebar-foreground/70">{getRoleLabel(user?.role)}</p>
               </div>
             </div>
