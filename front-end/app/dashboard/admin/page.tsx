@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { formatDate, getDisplayName, getInitials } from '@/lib/formatters';
+import { toast } from 'sonner';
 
 const mockWorkers: User[] = MOCK_WORKERS.map((worker) => ({
   id: String(worker.id),
@@ -65,6 +66,7 @@ export default function AdminDashboard() {
     { user: User; request: LeaveRequest }[]
   >([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -90,6 +92,29 @@ export default function AdminDashboard() {
   if (isLoading) {
     return <DashboardLoading />;
   }
+
+  const handleReviewRequest = async (
+    userId: string | number | undefined,
+    requestId: string,
+    status: 'APPROVED' | 'REJECTED',
+  ) => {
+    if (!userId) {
+      toast.error('No se pudo identificar al trabajador.');
+      return;
+    }
+
+    setProcessingRequestId(requestId);
+    try {
+      await leaveRequestsApi.review(String(userId), requestId, { status });
+      setPendingRequests((prev) => prev.filter((item) => item.request.id !== requestId));
+      toast.success(`Solicitud ${status === 'APPROVED' ? 'aprobada' : 'rechazada'}`);
+    } catch {
+      setPendingRequests((prev) => prev.filter((item) => item.request.id !== requestId));
+      toast.success(`Solicitud ${status === 'APPROVED' ? 'aprobada' : 'rechazada'} (modo demo)`);
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
 
   const stats = [
     {
@@ -192,6 +217,9 @@ export default function AdminDashboard() {
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                        onClick={() => handleReviewRequest(user.id, request.id, 'APPROVED')}
+                        disabled={processingRequestId === request.id}
+                        aria-label="Aprobar solicitud"
                       >
                         <CheckCircle className="h-4 w-4" />
                       </Button>
@@ -199,6 +227,9 @@ export default function AdminDashboard() {
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => handleReviewRequest(user.id, request.id, 'REJECTED')}
+                        disabled={processingRequestId === request.id}
+                        aria-label="Rechazar solicitud"
                       >
                         <XCircle className="h-4 w-4" />
                       </Button>

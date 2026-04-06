@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sidebar } from '@/components/dashboard/sidebar';
-import { Header } from '@/components/dashboard/header';
+import { DashboardShell } from '@/components/dashboard/dashboard-shell';
+import { DashboardLoading } from '@/components/dashboard/dashboard-loading';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,8 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Building2, Plus, Search, MoreHorizontal, Edit, Trash2, Ban, CheckCircle, Eye } from 'lucide-react';
 import { hospitalsApi, type Hospital, type HospitalStatus } from '@/lib/api';
-import { Spinner } from '@/components/ui/spinner';
 import { toast } from 'sonner';
+import { formatDate } from '@/lib/formatters';
 
 const mockHospitals: Hospital[] = [
   {
