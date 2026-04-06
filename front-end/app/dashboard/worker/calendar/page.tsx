@@ -1,14 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sidebar } from '@/components/dashboard/sidebar';
-import { Header } from '@/components/dashboard/header';
+import { DashboardShell } from '@/components/dashboard/dashboard-shell';
+import { DashboardLoading } from '@/components/dashboard/dashboard-loading';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import type { CalendarEvent } from '@/lib/api';
-import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 
 const mockCalendarEvents: CalendarEvent[] = [
@@ -113,27 +112,15 @@ export default function CalendarPage() {
   const selectedEvents = selectedDate ? events.filter(e => e.date === selectedDate) : [];
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="md:ml-64 flex-1 flex items-center justify-center">
-          <Spinner className="w-8 h-8" />
-        </div>
-      </div>
-    );
+    return <DashboardLoading />;
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="md:ml-64 flex-1">
-        <Header 
-          title="Mi Calendario" 
-          description="Consulta tus turnos y dias libres" 
-        />
-        
-        <main className="p-6 space-y-6">
-          <div className="grid gap-6 lg:grid-cols-3">
+    <DashboardShell
+      title="Mi Calendario"
+      description="Consulta tus turnos y dias libres"
+    >
+      <div className="grid gap-6 lg:grid-cols-3">
             {/* Calendar Grid */}
             <Card className="lg:col-span-2">
               <CardHeader className="flex flex-row items-center justify-between">
@@ -283,9 +270,7 @@ export default function CalendarPage() {
                 )}
               </CardContent>
             </Card>
-          </div>
-        </main>
       </div>
-    </div>
+    </DashboardShell>
   );
 }

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sidebar } from '@/components/dashboard/sidebar';
-import { Header } from '@/components/dashboard/header';
+import { DashboardShell } from '@/components/dashboard/dashboard-shell';
+import { DashboardLoading } from '@/components/dashboard/dashboard-loading';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,8 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { FileText, Download, Eye } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { payrollsApi, type Payroll } from '@/lib/api';
-import { Spinner } from '@/components/ui/spinner';
 import { toast } from 'sonner';
+import { formatCurrency, formatMonthYear } from '@/lib/formatters';
 
 const mockPayrolls: Payroll[] = [
   { id: '1', workerId: '1', workerFullName: 'Maria Garcia', hospitalId: '1', period: '2025-06', grossSalary: 2500, socialSecurityWorker: 158.75, incomeTaxWithholding: 375, otherDeductions: 0, netSalary: 1966.25, overtimeAmount: 0, bonusAmount: 0, status: 'ISSUED', issuedAt: '2025-06-25T10:00:00' },
@@ -77,213 +77,212 @@ export default function WorkerPayrollsPage() {
   const totalNetYear = payrolls.reduce((acc, p) => acc + p.netSalary, 0);
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="md:ml-64 flex-1 flex items-center justify-center">
-          <Spinner className="w-8 h-8" />
-        </div>
-      </div>
-    );
+    return <DashboardLoading />;
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="md:ml-64 flex-1">
-        <Header 
-          title="Mis Nominas" 
-          description="Consulta y descarga tus nominas mensuales" 
-        />
-        
-        <main className="p-6 space-y-6">
-          {/* Summary Card */}
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Total Neto Anual</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-emerald-600">
-                  {totalNetYear.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Nominas Disponibles</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{payrolls.length}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Ultima Nomina</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {payrolls[0]?.netSalary.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) || '-'}
-                </div>
-              </CardContent>
-            </Card>
+    <DashboardShell
+      title="Mis Nominas"
+      description="Consulta y descarga tus nominas mensuales"
+    >
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Neto Anual</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-emerald-600">
+              {formatCurrency(totalNetYear)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Nominas Disponibles</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{payrolls.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Ultima Nomina</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {formatCurrency(payrolls[0]?.netSalary)}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Historial de Nominas
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table className="min-w-[720px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Periodo</TableHead>
+                  <TableHead className="text-right">Bruto</TableHead>
+                  <TableHead className="text-right">Deducciones</TableHead>
+                  <TableHead className="text-right">Neto</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="w-24">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {payrolls.map((payroll) => (
+                  <TableRow key={payroll.id}>
+                    <TableCell className="font-medium">
+                      {formatMonthYear(`${payroll.period}-01`)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatCurrency(payroll.grossSalary + payroll.overtimeAmount + payroll.bonusAmount)}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      -{formatCurrency(payroll.socialSecurityWorker + payroll.incomeTaxWithholding + payroll.otherDeductions)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium text-emerald-600">
+                      {formatCurrency(payroll.netSalary)}
+                    </TableCell>
+                    <TableCell>{getStatusBadge(payroll.status)}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => {
+                            setSelectedPayroll(payroll);
+                            setIsDetailOpen(true);
+                          }}
+                          aria-label="Ver detalle de nomina"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleDownload(payroll)}
+                          aria-label="Descargar nomina"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
 
-          {/* Payrolls Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Historial de Nominas
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Periodo</TableHead>
-                    <TableHead className="text-right">Bruto</TableHead>
-                    <TableHead className="text-right">Deducciones</TableHead>
-                    <TableHead className="text-right">Neto</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="w-24">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {payrolls.map((payroll) => (
-                    <TableRow key={payroll.id}>
-                      <TableCell className="font-medium">
-                        {new Date(payroll.period + '-01').toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {(payroll.grossSalary + payroll.overtimeAmount + payroll.bonusAmount).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        -{(payroll.socialSecurityWorker + payroll.incomeTaxWithholding + payroll.otherDeductions).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                      </TableCell>
-                      <TableCell className="text-right font-medium text-emerald-600">
-                        {payroll.netSalary.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                      </TableCell>
-                      <TableCell>{getStatusBadge(payroll.status)}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8"
-                            onClick={() => {
-                              setSelectedPayroll(payroll);
-                              setIsDetailOpen(true);
-                            }}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8"
-                            onClick={() => handleDownload(payroll)}
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+          {payrolls.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
+              <h3 className="text-lg font-medium">No hay nominas disponibles</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Tus nominas apareceran aqui cuando sean emitidas
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-              {payrolls.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                  <h3 className="text-lg font-medium">No hay nominas disponibles</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Tus nominas apareceran aqui cuando sean emitidas
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </main>
-
-        {/* Payroll Detail Dialog */}
-        <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>
-                Detalle de Nomina - {selectedPayroll && new Date(selectedPayroll.period + '-01').toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
-              </DialogTitle>
-            </DialogHeader>
-            {selectedPayroll && (
-              <div className="space-y-4">
-                <div className="rounded-lg border p-4 space-y-3">
-                  <h4 className="font-medium">Devengos</h4>
-                  <div className="space-y-2 text-sm">
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Detalle de Nomina - {selectedPayroll && formatMonthYear(`${selectedPayroll.period}-01`)}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedPayroll && (
+            <div className="space-y-4">
+              <div className="rounded-lg border p-4 space-y-3">
+                <h4 className="font-medium">Devengos</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Salario Base</span>
+                    <span>{formatCurrency(selectedPayroll.grossSalary)}</span>
+                  </div>
+                  {selectedPayroll.overtimeAmount > 0 && (
                     <div className="flex justify-between">
-                      <span>Salario Base</span>
-                      <span>{selectedPayroll.grossSalary.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                      <span>Horas Extra</span>
+                      <span>{formatCurrency(selectedPayroll.overtimeAmount)}</span>
                     </div>
-                    {selectedPayroll.overtimeAmount > 0 && (
-                      <div className="flex justify-between">
-                        <span>Horas Extra</span>
-                        <span>{selectedPayroll.overtimeAmount.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
-                      </div>
-                    )}
-                    {selectedPayroll.bonusAmount > 0 && (
-                      <div className="flex justify-between">
-                        <span>Bonus</span>
-                        <span>{selectedPayroll.bonusAmount.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between font-medium pt-2 border-t">
-                      <span>Total Bruto</span>
-                      <span>{(selectedPayroll.grossSalary + selectedPayroll.overtimeAmount + selectedPayroll.bonusAmount).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                  )}
+                  {selectedPayroll.bonusAmount > 0 && (
+                    <div className="flex justify-between">
+                      <span>Bonus</span>
+                      <span>{formatCurrency(selectedPayroll.bonusAmount)}</span>
                     </div>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border p-4 space-y-3">
-                  <h4 className="font-medium">Deducciones</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Seguridad Social (6.35%)</span>
-                      <span>-{selectedPayroll.socialSecurityWorker.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
-                    </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>IRPF (15%)</span>
-                      <span>-{selectedPayroll.incomeTaxWithholding.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
-                    </div>
-                    {selectedPayroll.otherDeductions > 0 && (
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Otras Deducciones</span>
-                        <span>-{selectedPayroll.otherDeductions.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between font-medium pt-2 border-t text-destructive">
-                      <span>Total Deducciones</span>
-                      <span>-{(selectedPayroll.socialSecurityWorker + selectedPayroll.incomeTaxWithholding + selectedPayroll.otherDeductions).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 p-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-lg font-medium">Salario Neto</span>
-                    <span className="text-2xl font-bold text-emerald-600">
-                      {selectedPayroll.netSalary.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                  )}
+                  <div className="flex justify-between font-medium pt-2 border-t">
+                    <span>Total Bruto</span>
+                    <span>
+                      {formatCurrency(
+                        selectedPayroll.grossSalary
+                          + selectedPayroll.overtimeAmount
+                          + selectedPayroll.bonusAmount,
+                      )}
                     </span>
                   </div>
                 </div>
-
-                <Button className="w-full" onClick={() => handleDownload(selectedPayroll)}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Descargar PDF
-                </Button>
               </div>
-            )}
-          </DialogContent>
-        </Dialog>
-      </div>
-    </div>
+
+              <div className="rounded-lg border p-4 space-y-3">
+                <h4 className="font-medium">Deducciones</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Seguridad Social (6.35%)</span>
+                    <span>-{formatCurrency(selectedPayroll.socialSecurityWorker)}</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>IRPF (15%)</span>
+                    <span>-{formatCurrency(selectedPayroll.incomeTaxWithholding)}</span>
+                  </div>
+                  {selectedPayroll.otherDeductions > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Otras Deducciones</span>
+                      <span>-{formatCurrency(selectedPayroll.otherDeductions)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-medium pt-2 border-t text-destructive">
+                    <span>Total Deducciones</span>
+                    <span>
+                      -{formatCurrency(
+                        selectedPayroll.socialSecurityWorker
+                          + selectedPayroll.incomeTaxWithholding
+                          + selectedPayroll.otherDeductions,
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 p-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-medium">Salario Neto</span>
+                  <span className="text-2xl font-bold text-emerald-600">
+                    {formatCurrency(selectedPayroll.netSalary)}
+                  </span>
+                </div>
+              </div>
+
+              <Button className="w-full" onClick={() => handleDownload(selectedPayroll)}>
+                <Download className="mr-2 h-4 w-4" />
+                Descargar PDF
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </DashboardShell>
   );
 }

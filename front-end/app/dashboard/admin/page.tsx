@@ -198,7 +198,7 @@ export default function AdminDashboard() {
                 {pendingRequests.map(({ user, request }) => (
                   <div
                     key={request.id}
-                    className="flex items-center justify-between rounded-lg border bg-background/70 p-4 transition hover:border-muted-foreground/20 hover:shadow-sm"
+                    className="flex flex-col gap-4 rounded-lg border bg-background/70 p-4 transition hover:border-muted-foreground/20 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-medium">
@@ -212,7 +212,7 @@ export default function AdminDashboard() {
                         <p className="text-xs text-muted-foreground">{request.reason}</p>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 self-start sm:self-auto">
                       <Button
                         size="icon"
                         variant="ghost"

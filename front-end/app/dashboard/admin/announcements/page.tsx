@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sidebar } from '@/components/dashboard/sidebar';
-import { Header } from '@/components/dashboard/header';
+import { DashboardShell } from '@/components/dashboard/dashboard-shell';
+import { DashboardLoading } from '@/components/dashboard/dashboard-loading';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +15,6 @@ import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Bell, Plus, MoreHorizontal, Edit, Trash2, Eye, EyeOff, Radio } from 'lucide-react';
 import { hospitalsApi, type Announcement, type AnnouncementPriority } from '@/lib/api';
-import { Spinner } from '@/components/ui/spinner';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/auth-context';
 
@@ -190,24 +189,15 @@ export default function AdminAnnouncementsPage() {
   const activeCount = announcements.filter((announcement) => announcement.active).length;
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="md:ml-64 flex flex-1 items-center justify-center">
-          <Spinner className="h-8 w-8" />
-        </div>
-      </div>
-    );
+    return <DashboardLoading />;
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="md:ml-64 flex-1">
-        <Header title="Gestion de anuncios" description="Publica mensajes que se reflejan en todas las sesiones del hospital." />
-
-        <main className="space-y-6 p-6">
-          <section className="rounded-3xl border bg-gradient-to-r from-orange-50 via-white to-red-50 p-6">
+    <DashboardShell
+      title="Gestion de anuncios"
+      description="Publica mensajes que se reflejan en todas las sesiones del hospital."
+    >
+      <section className="rounded-3xl border bg-gradient-to-r from-orange-50 via-white to-red-50 p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="space-y-2">
                 <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs uppercase tracking-[0.18em] text-slate-600">
@@ -296,103 +286,101 @@ export default function AdminAnnouncementsPage() {
                 </DialogContent>
               </Dialog>
             </div>
-          </section>
+      </section>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            <AnnouncementStat title="Total" value={String(announcements.length)} hint="Anuncios en el hospital" />
-            <AnnouncementStat title="Activos" value={String(activeCount)} hint="Visibles para los trabajadores" valueClassName="text-emerald-600" />
-            <AnnouncementStat title="Ocultos" value={String(announcements.length - activeCount)} hint="Preparados o archivados" />
-          </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <AnnouncementStat title="Total" value={String(announcements.length)} hint="Anuncios en el hospital" />
+        <AnnouncementStat title="Activos" value={String(activeCount)} hint="Visibles para los trabajadores" valueClassName="text-emerald-600" />
+        <AnnouncementStat title="Ocultos" value={String(announcements.length - activeCount)} hint="Preparados o archivados" />
+      </div>
 
-          <Card className="rounded-3xl">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bell className="h-5 w-5" />
-                Anuncios publicados
-              </CardTitle>
-              <CardDescription>Gestiona los comunicados del hospital sin depender de mocks locales.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {announcements.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Bell className="mb-4 h-12 w-12 text-muted-foreground/40" />
-                  <h3 className="text-lg font-medium">No hay anuncios</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Publica el primero y quedara disponible al instante para el resto de sesiones.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {announcements.map((announcement) => (
-                    <div
-                      key={announcement.id}
-                      className={`rounded-2xl border p-4 transition-all ${announcement.active ? 'bg-background' : 'bg-slate-50 opacity-70'}`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0 flex-1">
-                          <div className="mb-2 flex flex-wrap items-center gap-2">
-                            <div className={`h-2.5 w-2.5 rounded-full ${
-                              announcement.priority === 'HIGH' ? 'bg-red-500' :
-                              announcement.priority === 'MEDIUM' ? 'bg-amber-500' :
-                              'bg-sky-500'
-                            }`} />
-                            <h4 className="font-medium">{announcement.title}</h4>
-                            {getPriorityBadge(announcement.priority)}
-                            {!announcement.active && (
-                              <Badge variant="outline" className="gap-1">
-                                <EyeOff className="h-3 w-3" />
-                                Oculto
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground">{announcement.content}</p>
-                          <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
-                            <span>Publicado: {new Date(announcement.publishedAt).toLocaleDateString('es-ES')}</span>
-                            {announcement.expiresAt && (
-                              <span>Expira: {new Date(announcement.expiresAt).toLocaleDateString('es-ES')}</span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">{announcement.active ? 'Visible' : 'Oculto'}</span>
-                            <Switch
-                              checked={announcement.active}
-                              onCheckedChange={() => toggleActive(announcement)}
-                            />
-                          </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openEditDialog(announcement)}>
-                                <Edit className="mr-2 h-4 w-4" />
-                                Editar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => toggleActive(announcement)}>
-                                {announcement.active ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
-                                {announcement.active ? 'Ocultar' : 'Mostrar'}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive" onClick={() => deleteAnnouncement(announcement.id)}>
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Eliminar
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+      <Card className="rounded-3xl">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            Anuncios publicados
+          </CardTitle>
+          <CardDescription>Gestiona los comunicados del hospital sin depender de mocks locales.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {announcements.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Bell className="mb-4 h-12 w-12 text-muted-foreground/40" />
+              <h3 className="text-lg font-medium">No hay anuncios</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Publica el primero y quedara disponible al instante para el resto de sesiones.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {announcements.map((announcement) => (
+                <div
+                  key={announcement.id}
+                  className={`rounded-2xl border p-4 transition-all ${announcement.active ? 'bg-background' : 'bg-slate-50 opacity-70'}`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <div className={`h-2.5 w-2.5 rounded-full ${
+                          announcement.priority === 'HIGH' ? 'bg-red-500' :
+                          announcement.priority === 'MEDIUM' ? 'bg-amber-500' :
+                          'bg-sky-500'
+                        }`} />
+                        <h4 className="font-medium">{announcement.title}</h4>
+                        {getPriorityBadge(announcement.priority)}
+                        {!announcement.active && (
+                          <Badge variant="outline" className="gap-1">
+                            <EyeOff className="h-3 w-3" />
+                            Oculto
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{announcement.content}</p>
+                      <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                        <span>Publicado: {new Date(announcement.publishedAt).toLocaleDateString('es-ES')}</span>
+                        {announcement.expiresAt && (
+                          <span>Expira: {new Date(announcement.expiresAt).toLocaleDateString('es-ES')}</span>
+                        )}
                       </div>
                     </div>
-                  ))}
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">{announcement.active ? 'Visible' : 'Oculto'}</span>
+                        <Switch
+                          checked={announcement.active}
+                          onCheckedChange={() => toggleActive(announcement)}
+                        />
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEditDialog(announcement)}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => toggleActive(announcement)}>
+                            {announcement.active ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
+                            {announcement.active ? 'Ocultar' : 'Mostrar'}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive" onClick={() => deleteAnnouncement(announcement.id)}>
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Eliminar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </main>
-      </div>
-    </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </DashboardShell>
   );
 }
 

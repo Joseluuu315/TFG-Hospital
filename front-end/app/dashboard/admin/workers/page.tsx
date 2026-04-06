@@ -295,17 +295,28 @@ export default function WorkersPage() {
     return matchesSearch && matchesDepartment;
   });
 
-  const toggleWorkerStatus = (id: string | number) => {
-    setWorkers((prev) =>
-      prev.map((worker) =>
-        worker.id === id ? { ...worker, enabled: !worker.enabled } : worker,
-      ),
-    );
-    toast.success('Estado del trabajador actualizado');
+  const toggleWorkerStatus = async (worker: User) => {
+    const nextStatus = !worker.enabled;
+    try {
+      await usersApi.update(String(worker.id), { enabled: nextStatus });
+      setWorkers((prev) =>
+        prev.map((item) =>
+          item.id === worker.id ? { ...item, enabled: nextStatus } : item,
+        ),
+      );
+      toast.success('Estado del trabajador actualizado');
+    } catch {
+      setWorkers((prev) =>
+        prev.map((item) =>
+          item.id === worker.id ? { ...item, enabled: nextStatus } : item,
+        ),
+      );
+      toast.success('Estado del trabajador actualizado (modo demo)');
+    }
   };
 
   const openCalendar = (id: string | number) => {
-    router.push(`/dashboard/workers/${id}/calendar`);
+    router.push(`/dashboard/admin/workers/${id}/calendar`);
   };
 
   const handleEditWorker = (worker: User) => {
@@ -542,7 +553,8 @@ export default function WorkersPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
+          <div className="overflow-x-auto">
+            <Table className="min-w-[900px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Empleado</TableHead>
@@ -614,7 +626,7 @@ export default function WorkersPage() {
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             className="text-destructive"
-                            onClick={() => toggleWorkerStatus(worker.id)}
+                            onClick={() => toggleWorkerStatus(worker)}
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
                             {isActive ? 'Dar de baja' : 'Activar'}
@@ -626,7 +638,8 @@ export default function WorkersPage() {
                 );
               })}
             </TableBody>
-          </Table>
+            </Table>
+          </div>
 
           {filteredWorkers.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-center">

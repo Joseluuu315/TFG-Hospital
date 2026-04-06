@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sidebar } from '@/components/dashboard/sidebar';
-import { Header } from '@/components/dashboard/header';
+import { DashboardShell } from '@/components/dashboard/dashboard-shell';
+import { DashboardLoading } from '@/components/dashboard/dashboard-loading';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +12,6 @@ import { Field, FieldLabel } from '@/components/ui/field';
 import { Textarea } from '@/components/ui/textarea';
 import { ClipboardList, CheckCircle, XCircle, Clock, User } from 'lucide-react';
 import { leaveRequestsApi, type User as UserType, type LeaveRequest } from '@/lib/api';
-import { Spinner } from '@/components/ui/spinner';
 import { toast } from 'sonner';
 
 interface RequestWithUser {
@@ -123,19 +122,12 @@ export default function AdminLeaveRequestsPage() {
   const processedRequests = requests.filter(r => r.request.status !== 'PENDING');
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="md:ml-64 flex-1 flex items-center justify-center">
-          <Spinner className="w-8 h-8" />
-        </div>
-      </div>
-    );
+    return <DashboardLoading />;
   }
 
   const RequestCard = ({ item, showActions = false }: { item: RequestWithUser; showActions?: boolean }) => (
     <div className="rounded-lg border p-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-medium shrink-0">
             {item.user.firstName[0]}{item.user.lastName[0]}
@@ -166,7 +158,7 @@ export default function AdminLeaveRequestsPage() {
           </div>
         </div>
         {showActions && item.request.status === 'PENDING' && (
-          <div className="flex gap-2 shrink-0">
+          <div className="flex gap-2 shrink-0 self-start sm:self-auto">
             <Button 
               size="sm" 
               variant="outline" 
@@ -192,17 +184,11 @@ export default function AdminLeaveRequestsPage() {
   );
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="md:ml-64 flex-1">
-        <Header 
-          title="Solicitudes de Dias Libres" 
-          description="Gestiona las solicitudes de vacaciones y dias libres" 
-        />
-        
-        <main className="p-6 space-y-6">
-          {/* Stats */}
-          <div className="grid gap-4 md:grid-cols-3">
+    <DashboardShell
+      title="Solicitudes de Dias Libres"
+      description="Gestiona las solicitudes de vacaciones y dias libres"
+    >
+      <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Pendientes</CardTitle>
@@ -233,112 +219,106 @@ export default function AdminLeaveRequestsPage() {
             </Card>
           </div>
 
-          {/* Requests */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ClipboardList className="h-5 w-5" />
-                Solicitudes
-              </CardTitle>
-              <CardDescription>
-                Revisa y gestiona las solicitudes de los trabajadores
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="pending">
-                <TabsList>
-                  <TabsTrigger value="pending" className="gap-2">
-                    Pendientes
-                    {pendingRequests.length > 0 && (
-                      <Badge variant="secondary" className="ml-1">{pendingRequests.length}</Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="processed">Procesadas</TabsTrigger>
-                </TabsList>
-                <TabsContent value="pending" className="mt-4 space-y-4">
-                  {pendingRequests.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-center">
-                      <CheckCircle className="h-12 w-12 text-emerald-500/50 mb-4" />
-                      <h3 className="text-lg font-medium">Todo al dia</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        No hay solicitudes pendientes de revision
-                      </p>
-                    </div>
-                  ) : (
-                    pendingRequests.map((item) => (
-                      <RequestCard key={item.request.id} item={item} showActions />
-                    ))
-                  )}
-                </TabsContent>
-                <TabsContent value="processed" className="mt-4 space-y-4">
-                  {processedRequests.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-center">
-                      <User className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                      <h3 className="text-lg font-medium">Sin historial</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        No hay solicitudes procesadas
-                      </p>
-                    </div>
-                  ) : (
-                    processedRequests.map((item) => (
-                      <RequestCard key={item.request.id} item={item} />
-                    ))
-                  )}
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        </main>
-
-        {/* Review Dialog */}
-        <Dialog open={isReviewDialogOpen} onOpenChange={setIsReviewDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Revisar Solicitud</DialogTitle>
-              <DialogDescription>
-                {selectedRequest && (
-                  <>
-                    Solicitud de <strong>{selectedRequest.user.firstName} {selectedRequest.user.lastName}</strong> para{' '}
-                    {calculateDays(selectedRequest.request.startDate, selectedRequest.request.endDate)} dia(s) -{' '}
-                    {selectedRequest.request.reason}
-                  </>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ClipboardList className="h-5 w-5" />
+            Solicitudes
+          </CardTitle>
+          <CardDescription>
+            Revisa y gestiona las solicitudes de los trabajadores
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="pending">
+            <TabsList>
+              <TabsTrigger value="pending" className="gap-2">
+                Pendientes
+                {pendingRequests.length > 0 && (
+                  <Badge variant="secondary" className="ml-1">{pendingRequests.length}</Badge>
                 )}
-              </DialogDescription>
-            </DialogHeader>
-            <Field>
-              <FieldLabel htmlFor="comment">Comentario (opcional)</FieldLabel>
-              <Textarea
-                id="comment"
-                value={reviewComment}
-                onChange={(e) => setReviewComment(e.target.value)}
-                placeholder="Anade un comentario para el trabajador..."
-                rows={3}
-              />
-            </Field>
-            <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setIsReviewDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button 
-                variant="destructive" 
-                onClick={() => handleReview('REJECTED')}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? <Spinner className="mr-2" /> : <XCircle className="h-4 w-4 mr-2" />}
-                Rechazar
-              </Button>
-              <Button 
-                onClick={() => handleReview('APPROVED')}
-                disabled={isSubmitting}
-                className="bg-emerald-600 hover:bg-emerald-700"
-              >
-                {isSubmitting ? <Spinner className="mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
-                Aprobar
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </div>
+              </TabsTrigger>
+              <TabsTrigger value="processed">Procesadas</TabsTrigger>
+            </TabsList>
+            <TabsContent value="pending" className="mt-4 space-y-4">
+              {pendingRequests.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <CheckCircle className="h-12 w-12 text-emerald-500/50 mb-4" />
+                  <h3 className="text-lg font-medium">Todo al dia</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    No hay solicitudes pendientes de revision
+                  </p>
+                </div>
+              ) : (
+                pendingRequests.map((item) => (
+                  <RequestCard key={item.request.id} item={item} showActions />
+                ))
+              )}
+            </TabsContent>
+            <TabsContent value="processed" className="mt-4 space-y-4">
+              {processedRequests.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <User className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <h3 className="text-lg font-medium">Sin historial</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    No hay solicitudes procesadas
+                  </p>
+                </div>
+              ) : (
+                processedRequests.map((item) => (
+                  <RequestCard key={item.request.id} item={item} />
+                ))
+              )}
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+
+      <Dialog open={isReviewDialogOpen} onOpenChange={setIsReviewDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Revisar Solicitud</DialogTitle>
+            <DialogDescription>
+              {selectedRequest && (
+                <>
+                  Solicitud de <strong>{selectedRequest.user.firstName} {selectedRequest.user.lastName}</strong> para{' '}
+                  {calculateDays(selectedRequest.request.startDate, selectedRequest.request.endDate)} dia(s) -{' '}
+                  {selectedRequest.request.reason}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <Field>
+            <FieldLabel htmlFor="comment">Comentario (opcional)</FieldLabel>
+            <Textarea
+              id="comment"
+              value={reviewComment}
+              onChange={(e) => setReviewComment(e.target.value)}
+              placeholder="Anade un comentario para el trabajador..."
+              rows={3}
+            />
+          </Field>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsReviewDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={() => handleReview('REJECTED')}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Procesando...' : <><XCircle className="h-4 w-4 mr-2" />Rechazar</>}
+            </Button>
+            <Button 
+              onClick={() => handleReview('APPROVED')}
+              disabled={isSubmitting}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {isSubmitting ? 'Procesando...' : <><CheckCircle className="h-4 w-4 mr-2" />Aprobar</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </DashboardShell>
   );
 }

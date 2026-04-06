@@ -243,7 +243,7 @@ export default function WorkerDashboard() {
                   return (
                     <div
                       key={event.id}
-                      className="flex items-center justify-between rounded-lg border bg-background/70 p-3 transition hover:border-muted-foreground/20 hover:shadow-sm"
+                      className="flex flex-col gap-3 rounded-lg border bg-background/70 p-3 transition hover:border-muted-foreground/20 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="flex items-center gap-3">
                         <div className="text-center min-w-[50px]">
@@ -263,7 +263,9 @@ export default function WorkerDashboard() {
                           <p className="text-xs text-muted-foreground">{event.notes}</p>
                         </div>
                       </div>
-                      {renderBadge(EVENT_BADGES[event.type])}
+                      <div className="self-start sm:self-auto">
+                        {renderBadge(EVENT_BADGES[event.type])}
+                      </div>
                     </div>
                   );
                 })}
@@ -295,7 +297,7 @@ export default function WorkerDashboard() {
                 {leaveRequests.map((request) => (
                   <div
                     key={request.id}
-                    className="flex items-center justify-between rounded-lg border bg-background/70 p-3 transition hover:border-muted-foreground/20 hover:shadow-sm"
+                    className="flex flex-col gap-3 rounded-lg border bg-background/70 p-3 transition hover:border-muted-foreground/20 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div>
                       <p className="font-medium text-sm">
@@ -303,7 +305,9 @@ export default function WorkerDashboard() {
                       </p>
                       <p className="text-xs text-muted-foreground">{request.reason}</p>
                     </div>
-                    {renderBadge(REQUEST_BADGES[request.status])}
+                    <div className="self-start sm:self-auto">
+                      {renderBadge(REQUEST_BADGES[request.status])}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -312,7 +316,7 @@ export default function WorkerDashboard() {
         </Card>
       </div>
 
-      <Card>
+      <Card id="announcements">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Bell className="h-5 w-5" />

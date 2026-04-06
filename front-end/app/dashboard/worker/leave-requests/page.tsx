@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sidebar } from '@/components/dashboard/sidebar';
-import { Header } from '@/components/dashboard/header';
+import { DashboardShell } from '@/components/dashboard/dashboard-shell';
+import { DashboardLoading } from '@/components/dashboard/dashboard-loading';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +12,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar, Plus, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { usersApi, type LeaveRequest } from '@/lib/api';
-import { Spinner } from '@/components/ui/spinner';
 import { toast } from 'sonner';
 
 const mockLeaveRequests: LeaveRequest[] = [
@@ -131,28 +130,15 @@ export default function WorkerLeaveRequestsPage() {
   const rejectedCount = leaveRequests.filter(r => r.status === 'REJECTED').length;
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="md:ml-64 flex-1 flex items-center justify-center">
-          <Spinner className="w-8 h-8" />
-        </div>
-      </div>
-    );
+    return <DashboardLoading />;
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="md:ml-64 flex-1">
-        <Header 
-          title="Solicitud de Dias Libres" 
-          description="Gestiona tus solicitudes de vacaciones y dias libres" 
-        />
-        
-        <main className="p-6 space-y-6">
-          {/* Summary Cards */}
-          <div className="grid gap-4 md:grid-cols-4">
+    <DashboardShell
+      title="Solicitud de Dias Libres"
+      description="Gestiona tus solicitudes de vacaciones y dias libres"
+    >
+      <div className="grid gap-4 md:grid-cols-4">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Dias Disponibles</CardTitle>
@@ -188,150 +174,146 @@ export default function WorkerLeaveRequestsPage() {
             </Card>
           </div>
 
-          {/* Create Request Button */}
-          <div className="flex justify-end">
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Nueva Solicitud
+      <div className="flex justify-end">
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Nueva Solicitud
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Solicitar Dias Libres</DialogTitle>
+              <DialogDescription>
+                Selecciona las fechas y explica el motivo de tu solicitud.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleCreateRequest}>
+              <FieldGroup className="py-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel htmlFor="startDate">Fecha Inicio</FieldLabel>
+                    <Input
+                      id="startDate"
+                      type="date"
+                      value={formData.startDate}
+                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                      min={new Date().toISOString().split('T')[0]}
+                      required
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="endDate">Fecha Fin</FieldLabel>
+                    <Input
+                      id="endDate"
+                      type="date"
+                      value={formData.endDate}
+                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                      min={formData.startDate || new Date().toISOString().split('T')[0]}
+                      required
+                    />
+                  </Field>
+                </div>
+                {formData.startDate && formData.endDate && (
+                  <div className="text-sm text-muted-foreground bg-muted rounded-lg p-3">
+                    Total: <span className="font-medium">{calculateDays(formData.startDate, formData.endDate)} dias</span>
+                  </div>
+                )}
+                <Field>
+                  <FieldLabel htmlFor="reason">Motivo</FieldLabel>
+                  <Textarea
+                    id="reason"
+                    value={formData.reason}
+                    onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                    placeholder="Explica el motivo de tu solicitud..."
+                    rows={3}
+                    required
+                  />
+                </Field>
+              </FieldGroup>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                  Cancelar
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Solicitar Dias Libres</DialogTitle>
-                  <DialogDescription>
-                    Selecciona las fechas y explica el motivo de tu solicitud.
-                  </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleCreateRequest}>
-                  <FieldGroup className="py-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <Field>
-                        <FieldLabel htmlFor="startDate">Fecha Inicio</FieldLabel>
-                        <Input
-                          id="startDate"
-                          type="date"
-                          value={formData.startDate}
-                          onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                          min={new Date().toISOString().split('T')[0]}
-                          required
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="endDate">Fecha Fin</FieldLabel>
-                        <Input
-                          id="endDate"
-                          type="date"
-                          value={formData.endDate}
-                          onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                          min={formData.startDate || new Date().toISOString().split('T')[0]}
-                          required
-                        />
-                      </Field>
-                    </div>
-                    {formData.startDate && formData.endDate && (
-                      <div className="text-sm text-muted-foreground bg-muted rounded-lg p-3">
-                        Total: <span className="font-medium">{calculateDays(formData.startDate, formData.endDate)} dias</span>
-                      </div>
-                    )}
-                    <Field>
-                      <FieldLabel htmlFor="reason">Motivo</FieldLabel>
-                      <Textarea
-                        id="reason"
-                        value={formData.reason}
-                        onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-                        placeholder="Explica el motivo de tu solicitud..."
-                        rows={3}
-                        required
-                      />
-                    </Field>
-                  </FieldGroup>
-                  <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                      Cancelar
-                    </Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? <><Spinner className="mr-2" /> Enviando...</> : 'Enviar Solicitud'}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          {/* Requests List */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Mis Solicitudes
-              </CardTitle>
-              <CardDescription>
-                Historial de todas tus solicitudes de dias libres
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {leaveRequests.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Calendar className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                  <h3 className="text-lg font-medium">No tienes solicitudes</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Crea tu primera solicitud de dias libres
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {leaveRequests.map((request) => (
-                    <div
-                      key={request.id}
-                      className="rounded-lg border p-4"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="hidden sm:flex shrink-0">
-                          {getStatusIcon(request.status)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">
-                                {new Date(request.startDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
-                                {request.startDate !== request.endDate && (
-                                  <> - {new Date(request.endDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</>
-                                )}
-                              </span>
-                              <span className="text-sm text-muted-foreground">
-                                ({calculateDays(request.startDate, request.endDate)} {calculateDays(request.startDate, request.endDate) === 1 ? 'dia' : 'dias'})
-                              </span>
-                            </div>
-                            {getStatusBadge(request.status)}
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-2">{request.reason}</p>
-                          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-                            <span>
-                              Solicitado: {new Date(request.requestedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
-                            </span>
-                            {request.reviewedAt && (
-                              <span>
-                                Revisado: {new Date(request.reviewedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
-                              </span>
-                            )}
-                          </div>
-                          {request.reviewComment && (
-                            <div className="mt-3 p-3 rounded-lg bg-muted text-sm">
-                              <span className="font-medium">Comentario:</span> {request.reviewComment}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </main>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Enviando...' : 'Enviar Solicitud'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
-    </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Mis Solicitudes
+          </CardTitle>
+          <CardDescription>
+            Historial de todas tus solicitudes de dias libres
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {leaveRequests.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Calendar className="h-12 w-12 text-muted-foreground/50 mb-4" />
+              <h3 className="text-lg font-medium">No tienes solicitudes</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Crea tu primera solicitud de dias libres
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {leaveRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="rounded-lg border p-4"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="hidden sm:flex shrink-0">
+                      {getStatusIcon(request.status)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">
+                            {new Date(request.startDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                            {request.startDate !== request.endDate && (
+                              <> - {new Date(request.endDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</>
+                            )}
+                          </span>
+                          <span className="text-sm text-muted-foreground">
+                            ({calculateDays(request.startDate, request.endDate)} {calculateDays(request.startDate, request.endDate) === 1 ? 'dia' : 'dias'})
+                          </span>
+                        </div>
+                        {getStatusBadge(request.status)}
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-2">{request.reason}</p>
+                      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+                        <span>
+                          Solicitado: {new Date(request.requestedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                        {request.reviewedAt && (
+                          <span>
+                            Revisado: {new Date(request.reviewedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                        )}
+                      </div>
+                      {request.reviewComment && (
+                        <div className="mt-3 p-3 rounded-lg bg-muted text-sm">
+                          <span className="font-medium">Comentario:</span> {request.reviewComment}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </DashboardShell>
   );
 }
