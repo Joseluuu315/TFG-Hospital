@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { buildParticipantDirectory } from '@/components/chat/chat-models';
 import { useAuth } from '@/contexts/auth-context';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import { ChatWindow } from '@/components/chat/chat-window';
 import { NewChatDialog } from '@/components/chat/new-chat-dialog';
+import { useChatPresence } from '@/hooks/use-chat-presence';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, MessageCircle, Plus, Wifi, WifiOff } from 'lucide-react';
 import { chatApi, usersApi, type Chat, type ChatMessage, type User } from '@/lib/api';
@@ -27,6 +29,7 @@ export default function WorkerChatPage() {
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
+  const [directoryUsers, setDirectoryUsers] = useState<User[]>([]);
   const [showNewChatDialog, setShowNewChatDialog] = useState(false);
   const [error, setError] = useState('');
   const [isLive, setIsLive] = useState(false);
@@ -39,13 +42,14 @@ export default function WorkerChatPage() {
     setChats(chatResponse.data);
     setSelectedChat((current) => {
       if (!current) return chatResponse.data[0] || null;
-      return chatResponse.data.find((c) => c.id === current.id) || chatResponse.data[0] || null;
+      return chatResponse.data.find((chat) => chat.id === current.id) || chatResponse.data[0] || null;
     });
     setWorkers(
-        usersResponse.data
-            .filter((w) => w.role === 'WORKER' && String(w.id) !== String(user?.id))
-            .map(toWorker)
+      usersResponse.data
+        .filter((worker) => worker.role === 'WORKER' && String(worker.id) !== String(user?.id))
+        .map(toWorker)
     );
+    setDirectoryUsers(usersResponse.data);
   }, [user?.id]);
 
   useEffect(() => {
@@ -60,13 +64,19 @@ export default function WorkerChatPage() {
         setIsLive(true);
       } catch (err) {
         console.error('Error loading chats', err);
-        if (isMounted) { setError('No se pudieron cargar las conversaciones.'); setIsLive(false); }
+        if (isMounted) {
+          setError('No se pudieron cargar las conversaciones.');
+          setIsLive(false);
+        }
       }
     };
 
     loadData();
     const interval = setInterval(loadData, CHAT_REFRESH_MS);
-    return () => { isMounted = false; clearInterval(interval); };
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [user?.id, refreshChats]);
 
   useEffect(() => {
@@ -80,14 +90,19 @@ export default function WorkerChatPage() {
         setMessages(response.data);
         await chatApi.markAsRead(selectedChat.id);
         setChats((prev) =>
-            prev.map((chat) => chat.id === selectedChat.id ? { ...chat, unreadCount: 0 } : chat)
+          prev.map((chat) => chat.id === selectedChat.id ? { ...chat, unreadCount: 0 } : chat)
         );
-      } catch (err) { console.error('Error loading messages', err); }
+      } catch (err) {
+        console.error('Error loading messages', err);
+      }
     };
 
     loadMessages();
     const interval = setInterval(loadMessages, MESSAGE_REFRESH_MS);
-    return () => { isMounted = false; clearInterval(interval); };
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [selectedChat]);
 
   const handleSendMessage = async (content: string) => {
@@ -97,13 +112,15 @@ export default function WorkerChatPage() {
       const message = response.data;
       setMessages((prev) => [...prev, message]);
       setChats((prev) =>
-          prev.map((chat) =>
-              chat.id === selectedChat.id
-                  ? { ...chat, lastMessage: content, lastMessageTime: message.timestamp, unreadCount: 0 }
-                  : chat
-          )
+        prev.map((chat) =>
+          chat.id === selectedChat.id
+            ? { ...chat, lastMessage: content, lastMessageTime: message.timestamp, unreadCount: 0 }
+            : chat
+        )
       );
-    } catch (err) { console.error('Error sending message', err); }
+    } catch (err) {
+      console.error('Error sending message', err);
+    }
   };
 
   const handleCreatePrivateChat = async (targetUserId: string) => {
@@ -111,14 +128,23 @@ export default function WorkerChatPage() {
     try {
       const response = await chatApi.createPrivateChat(targetUserId);
       const chat = response.data;
-      setChats((prev) => [chat, ...prev.filter((c) => c.id !== chat.id)]);
+      setChats((prev) => [chat, ...prev.filter((currentChat) => currentChat.id !== chat.id)]);
       setSelectedChat(chat);
       setMessages([]);
       setShowNewChatDialog(false);
-    } catch (err) { console.error('Error creando chat privado', err); }
+    } catch (err) {
+      console.error('Error creando chat privado', err);
+    }
   };
 
-  const unreadCount = chats.filter((c) => c.unreadCount > 0).length;
+  const unreadCount = chats.filter((chat) => chat.unreadCount > 0).length;
+  const currentUserId = String(user?.id || '');
+  const participants = useMemo(() => buildParticipantDirectory(directoryUsers), [directoryUsers]);
+  const trackedPresenceIds = useMemo(
+    () => Array.from(new Set(chats.flatMap((chat) => chat.participants))).concat(currentUserId).filter(Boolean),
+    [chats, currentUserId]
+  );
+  const presenceByUserId = useChatPresence(trackedPresenceIds, currentUserId);
 
   return (
     <DashboardShell
@@ -134,95 +160,98 @@ export default function WorkerChatPage() {
             </Link>
           </Button>
         </div>
-        <div className="flex min-h-[calc(100vh-4rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:h-[calc(100vh-4rem)]">
-        {/* Top bar */}
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-sm">
-              <MessageCircle className="h-4 w-4" />
+
+        <div className="flex min-h-[72dvh] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm md:h-[calc(100dvh-14rem)]">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-sm">
+                <MessageCircle className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Mis mensajes</p>
+                <p className="text-xs text-slate-400">
+                  {unreadCount > 0 ? `${unreadCount} conversaciones con mensajes nuevos` : 'Todo al dia'}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-800">Mis mensajes</p>
-              <p className="text-xs text-slate-400">
-                {unreadCount > 0 ? `${unreadCount} conversación${unreadCount > 1 ? 'es' : ''} con mensajes nuevos` : 'Todo al día'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div
+            <div className="flex items-center gap-2">
+              <div
                 className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
-                    isLive ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+                  isLive ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
                 }`}
                 role="status"
                 aria-live="polite"
-            >
-              {isLive
+              >
+                {isLive
                   ? <><Wifi className="h-3 w-3" /> Conectado</>
                   : <><WifiOff className="h-3 w-3" /> Reconectando</>
-              }
+                }
+              </div>
+              <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setShowNewChatDialog(true)}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Nuevo chat
+              </Button>
             </div>
-            <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setShowNewChatDialog(true)}>
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              Nuevo chat
-            </Button>
           </div>
-        </div>
 
-        {/* Body */}
-        <div className="flex flex-1 flex-col overflow-hidden md:flex-row">
-          {/* Sidebar */}
-          <div className="w-full shrink-0 border-b border-slate-100 md:w-72 md:border-b-0 md:border-r">
-            <ChatSidebar
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+            <div className="max-h-80 w-full shrink-0 overflow-hidden border-b border-slate-100 md:max-h-none md:w-80 md:border-b-0 md:border-r">
+              <ChatSidebar
                 chats={chats}
                 selectedChatId={selectedChat?.id || null}
                 onSelectChat={setSelectedChat}
                 onNewChat={() => setShowNewChatDialog(true)}
                 showNewChatButton={false}
                 userRole={user?.role}
-            />
-          </div>
+                currentUserId={currentUserId}
+                participants={participants}
+                presenceByUserId={presenceByUserId}
+              />
+            </div>
 
-          {/* Área de chat */}
-          <div className="flex flex-1 flex-col overflow-hidden bg-slate-50/30">
-            {error && (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-50/30">
+              {error && (
                 <div className="flex items-center gap-2 border-b border-red-100 bg-red-50 px-4 py-2 text-sm text-red-600" role="alert">
                   <MessageCircle className="h-4 w-4 shrink-0" />
                   {error}
                 </div>
-            )}
-            {selectedChat ? (
+              )}
+              {selectedChat ? (
                 <ChatWindow
-                    chat={selectedChat}
-                    messages={messages}
-                    currentUserId={String(user?.id)}
-                    onSendMessage={handleSendMessage}
+                  chat={selectedChat}
+                  messages={messages}
+                  currentUserId={currentUserId}
+                  onSendMessage={handleSendMessage}
+                  participants={participants}
+                  presenceByUserId={presenceByUserId}
                 />
-            ) : (
+              ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-4 text-slate-400">
                   <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
                     <MessageCircle className="h-7 w-7" />
                   </div>
                   <div className="text-center">
-                    <p className="font-semibold text-slate-600">Selecciona una conversación</p>
-                    <p className="text-sm">O inicia una nueva con un compañero</p>
+                    <p className="font-semibold text-slate-600">Selecciona una conversacion</p>
+                    <p className="text-sm">O inicia una nueva con un companero</p>
                   </div>
                   <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setShowNewChatDialog(true)}>
                     <Plus className="mr-2 h-3.5 w-3.5" />
-                    Nueva conversación
+                    Nueva conversacion
                   </Button>
                 </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
 
-        <NewChatDialog
+          <NewChatDialog
             open={showNewChatDialog}
             onOpenChange={setShowNewChatDialog}
             workers={workers}
-            currentUserId={String(user?.id || '')}
+            currentUserId={currentUserId}
             onCreatePrivateChat={handleCreatePrivateChat}
             isAdmin={user?.role === 'HOSPITAL_ADMIN' || user?.role === 'ROOT'}
-        />
+          />
+        </div>
       </div>
     </DashboardShell>
   );
@@ -231,8 +260,8 @@ export default function WorkerChatPage() {
 function toWorker(user: User): Worker {
   return {
     id: String(user.id),
-    nombre: (user as any).nombre || (user as any).firstName || '',
-    apellidos: (user as any).apellidos || (user as any).lastName || '',
-    departamento: (user as any).department || 'Sin departamento',
+    nombre: (user as User & { nombre?: string; firstName?: string }).nombre || (user as User & { firstName?: string }).firstName || '',
+    apellidos: (user as User & { apellidos?: string; lastName?: string }).apellidos || (user as User & { lastName?: string }).lastName || '',
+    departamento: (user as User & { department?: string }).department || 'Sin departamento',
   };
 }

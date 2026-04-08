@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { buildParticipantDirectory } from '@/components/chat/chat-models';
 import { useAuth } from '@/contexts/auth-context';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import { ChatWindow } from '@/components/chat/chat-window';
 import { NewChatDialog } from '@/components/chat/new-chat-dialog';
+import { useChatPresence } from '@/hooks/use-chat-presence';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -33,6 +35,7 @@ export default function AdminChatPage() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [workGroups, setWorkGroups] = useState<WorkGroup[]>([]);
   const [workers, setWorkers] = useState<WorkerOption[]>([]);
+  const [directoryUsers, setDirectoryUsers] = useState<User[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [showNewChatDialog, setShowNewChatDialog] = useState(false);
@@ -60,6 +63,7 @@ export default function AdminChatPage() {
                 .filter((w) => w.role === 'WORKER' && String(w.hospitalId) === String(user.hospitalId))
                 .map(toWorkerOption)
         );
+        setDirectoryUsers(usersResponse.data);
         setSelectedChat((current) => {
           if (!current) return nextChats[0] || null;
           return nextChats.find((c) => c.id === current.id) || nextChats[0] || null;
@@ -181,6 +185,13 @@ export default function AdminChatPage() {
 
   const connectedGroups = workGroups.filter((g) => chats.some((c) => c.id === g.chatId)).length;
   const unreadChats = chats.filter((c) => c.unreadCount > 0).length;
+  const currentUserId = String(user?.id || '');
+  const participants = useMemo(() => buildParticipantDirectory(directoryUsers), [directoryUsers]);
+  const trackedPresenceIds = useMemo(
+      () => Array.from(new Set(chats.flatMap((chat) => chat.participants))).concat(currentUserId).filter(Boolean),
+      [chats, currentUserId]
+  );
+  const presenceByUserId = useChatPresence(trackedPresenceIds, currentUserId);
 
   return (
     <DashboardShell
@@ -239,8 +250,8 @@ export default function AdminChatPage() {
 
           {/* TAB: CHAT */}
           <TabsContent value="chat" className="mt-4">
-            <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:flex-row md:h-[calc(100vh-17rem)]">
-              <div className="w-full flex-shrink-0 border-b border-slate-100 md:w-72 md:border-b-0 md:border-r">
+            <div className="flex min-h-[72dvh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:h-[calc(100dvh-17rem)] md:flex-row">
+              <div className="max-h-80 w-full shrink-0 overflow-hidden border-b border-slate-100 md:max-h-none md:w-80 md:border-b-0 md:border-r">
                 <ChatSidebar
                     chats={chats}
                     selectedChatId={selectedChat?.id || null}
@@ -248,15 +259,20 @@ export default function AdminChatPage() {
                     onNewChat={() => setShowNewChatDialog(true)}
                     showNewChatButton
                     userRole={user?.role}
+                    currentUserId={currentUserId}
+                    participants={participants}
+                    presenceByUserId={presenceByUserId}
                 />
               </div>
-              <div className="flex-1 bg-slate-50/50">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-50/50">
                 {selectedChat ? (
                     <ChatWindow
                         chat={selectedChat}
                         messages={messages}
-                        currentUserId={String(user?.id)}
+                        currentUserId={currentUserId}
                         onSendMessage={handleSendMessage}
+                        participants={participants}
+                        presenceByUserId={presenceByUserId}
                     />
                 ) : (
                     <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
