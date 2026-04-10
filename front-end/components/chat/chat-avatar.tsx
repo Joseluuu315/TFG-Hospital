@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -41,12 +42,15 @@ export function ChatAvatar({
         aria-hidden="true"
       >
         {imageUrl && failedImageUrl !== imageUrl ? (
-          <img
+          <Image
             key={imageUrl}
             src={imageUrl}
             alt={name}
+            width={40}
+            height={40}
             className="h-full w-full object-cover"
             onError={() => setFailedImageUrl(imageUrl)}
+            unoptimized
           />
         ) : (
           initials

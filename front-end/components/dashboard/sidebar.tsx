@@ -1,6 +1,8 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
+import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { cn } from '@/lib/utils';
@@ -20,6 +22,7 @@ export function Sidebar() {
   const avatarUrl = (user as { imageURL?: string; avatar?: string } | null)?.imageURL
     ?? (user as { imageURL?: string; avatar?: string } | null)?.avatar
     ?? null;
+  const [avatarError, setAvatarError] = useState(false);
 
   return (
       <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 border-r bg-sidebar text-sidebar-foreground md:flex">
@@ -65,15 +68,15 @@ export function Sidebar() {
 
               {/* Avatar */}
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground text-sm font-medium overflow-hidden">
-                {avatarUrl ? (
-                    <img
+                {avatarUrl && !avatarError ? (
+                    <Image
                         src={avatarUrl}
                         alt="Avatar"
+                        width={36}
+                        height={36}
                         className="h-9 w-9 rounded-full object-cover"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).style.display = 'none';
-                          (e.currentTarget.parentElement as HTMLElement).innerText = initial;
-                        }}
+                        onError={() => setAvatarError(true)}
+                        unoptimized
                     />
                 ) : (
                     <span>{initial}</span>

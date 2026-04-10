@@ -43,11 +43,27 @@ public class UsersController {
     }
 
     /**
+     * Obtiene un usuario concreto por id.
+     */
+    @GetMapping("/{id}")
+    public UserDto getById(@PathVariable String id) {
+        return userService.getById(id);
+    }
+
+    /**
      * Crea un usuario trabajador.
      */
     @PostMapping
     public UserDto create(@RequestBody CreateUserRequestDto request) {
         return userService.createWorker(request);
+    }
+
+    /**
+     * Actualiza un usuario concreto.
+     */
+    @PutMapping("/{id}")
+    public UserDto update(@PathVariable String id, @RequestBody UpdateUserRequestDto request) {
+        return userService.updateUser(id, request);
     }
 
     /**

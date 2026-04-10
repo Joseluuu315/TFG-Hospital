@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -103,11 +104,14 @@ export default function SettingsPage() {
               <div className="flex flex-col items-center gap-3 mb-2">
                 <div className="relative w-28 h-28">
                   {avatarSrc ? (
-                      <img
+                      <Image
                           src={avatarSrc}
                           alt="Avatar"
-                          className="w-28 h-28 rounded-full object-cover border-2 border-border"
+                          width={112}
+                          height={112}
+                          className="h-28 w-28 rounded-full border-2 border-border object-cover"
                           onError={() => setImgError(true)}
+                          unoptimized
                       />
                   ) : (
                       <div className="w-28 h-28 rounded-full bg-muted flex items-center justify-center text-3xl font-semibold text-muted-foreground border-2 border-border">

@@ -297,7 +297,7 @@ export default function PayrollsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {workers.map((worker) => (
-                        <SelectItem key={worker.id} value={worker.id}>
+                        <SelectItem key={worker.id} value={String(worker.id)}>
                           {worker.firstName} {worker.lastName}
                         </SelectItem>
                       ))}

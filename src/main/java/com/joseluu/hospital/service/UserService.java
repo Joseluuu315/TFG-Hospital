@@ -58,6 +58,14 @@ public class UserService {
     }
 
     /**
+     * Obtiene un usuario por id o lanza error.
+     */
+    public UserDto getById(String id) {
+        return findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+    }
+
+    /**
      * Obtiene los eventos de calendario de un usuario para un mes dado.
      */
     public List<CalendarEventDto> getCalendarEvents(String userId, String month) {
@@ -109,13 +117,44 @@ public class UserService {
      */
     public UserDto updateUser(String userId, UpdateUserRequestDto request) {
         UserDocument user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
 
-        user.setFirstName(request.getFirstName());
-        user.setLastName(request.getLastName());
-        user.setEmail(request.getEmail());
-        user.setDni(request.getDni());
-        user.setImageURL(request.getImageURL());
+        if (request.getFirstName() != null) {
+            user.setFirstName(request.getFirstName());
+        }
+        if (request.getLastName() != null) {
+            user.setLastName(request.getLastName());
+        }
+        if (request.getEmail() != null) {
+            user.setEmail(request.getEmail());
+        }
+        if (request.getPhone() != null) {
+            user.setPhone(request.getPhone());
+        }
+        if (request.getDni() != null) {
+            user.setDni(request.getDni());
+        }
+        if (request.getImageURL() != null) {
+            user.setImageURL(request.getImageURL());
+        }
+        if (request.getDepartment() != null) {
+            user.setDepartment(request.getDepartment());
+        }
+        if (request.getJobTitle() != null) {
+            user.setJobTitle(request.getJobTitle());
+        }
+        if (request.getBaseSalary() != null) {
+            user.setBaseSalary(request.getBaseSalary());
+        }
+        if (request.getEnabled() != null) {
+            user.setEnabled(request.getEnabled());
+        }
+        if (request.getAccountNonLocked() != null) {
+            user.setAccountNonLocked(request.getAccountNonLocked());
+        }
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            user.setPassword(request.getPassword());
+        }
         user.setUpdatedAt(LocalDateTime.now().toString());
 
         return toDto(userRepository.save(user));

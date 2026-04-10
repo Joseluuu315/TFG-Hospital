@@ -9,8 +9,13 @@ import com.joseluu.hospital.entity.UserDocument;
 import com.joseluu.hospital.entity.enums.HospitalStatus;
 import com.joseluu.hospital.entity.enums.NotificationType;
 import com.joseluu.hospital.entity.enums.UserRole;
+import com.joseluu.hospital.repository.ChatMessageRepository;
+import com.joseluu.hospital.repository.ChatRepository;
 import com.joseluu.hospital.repository.HospitalRepository;
+import com.joseluu.hospital.repository.LeaveRequestRepository;
+import com.joseluu.hospital.repository.PayrollRepository;
 import com.joseluu.hospital.repository.UserRepository;
+import com.joseluu.hospital.repository.WorkGroupRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -27,11 +32,28 @@ public class HospitalService {
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final PayrollRepository payrollRepository;
+    private final LeaveRequestRepository leaveRequestRepository;
+    private final WorkGroupRepository workGroupRepository;
+    private final ChatRepository chatRepository;
+    private final ChatMessageRepository chatMessageRepository;
 
-    public HospitalService(HospitalRepository hospitalRepository, UserRepository userRepository, NotificationService notificationService) {
+    public HospitalService(HospitalRepository hospitalRepository,
+                           UserRepository userRepository,
+                           NotificationService notificationService,
+                           PayrollRepository payrollRepository,
+                           LeaveRequestRepository leaveRequestRepository,
+                           WorkGroupRepository workGroupRepository,
+                           ChatRepository chatRepository,
+                           ChatMessageRepository chatMessageRepository) {
         this.hospitalRepository = hospitalRepository;
         this.userRepository = userRepository;
         this.notificationService = notificationService;
+        this.payrollRepository = payrollRepository;
+        this.leaveRequestRepository = leaveRequestRepository;
+        this.workGroupRepository = workGroupRepository;
+        this.chatRepository = chatRepository;
+        this.chatMessageRepository = chatMessageRepository;
     }
 
     /**
@@ -57,8 +79,9 @@ public class HospitalService {
      */
     public HospitalDto create(CreateHospitalRequestDto request) {
         LocalDateTime now = LocalDateTime.now();
+        String hospitalId = UUID.randomUUID().toString();
         HospitalDocument document = HospitalDocument.builder()
-                .id(UUID.randomUUID().toString())
+                .id(hospitalId)
                 .name(request.getName())
                 .address(request.getAddress())
                 .city(request.getCity())
@@ -69,7 +92,11 @@ public class HospitalService {
                 .createdAt(now.toString())
                 .updatedAt(now.toString())
                 .build();
-        return toDto(hospitalRepository.save(document));
+        HospitalDocument savedHospital = hospitalRepository.save(document);
+
+        createAdminForHospital(savedHospital, request.getAdminEmail(), now);
+
+        return toDto(savedHospital);
     }
 
     /**
@@ -102,6 +129,23 @@ public class HospitalService {
      * Elimina un hospital por id.
      */
     public void delete(String id) {
+        userRepository.findAll().stream()
+                .filter(user -> id.equals(user.getHospitalId()))
+                .forEach(user -> {
+                    leaveRequestRepository.findByUserId(user.getId()).forEach(request ->
+                            leaveRequestRepository.deleteById(request.getId()));
+                    payrollRepository.findByWorkerId(user.getId()).forEach(payroll ->
+                            payrollRepository.deleteById(payroll.getId()));
+                    userRepository.deleteById(user.getId());
+                });
+
+        workGroupRepository.findByHospitalId(id).forEach(group -> workGroupRepository.deleteById(group.getId()));
+        chatRepository.findAll().stream()
+                .filter(chat -> id.equals(chat.getHospitalId()))
+                .forEach(chat -> {
+                    chatMessageRepository.deleteByChatId(chat.getId());
+                    chatRepository.deleteById(chat.getId());
+                });
         hospitalRepository.deleteById(id);
     }
 
@@ -232,5 +276,54 @@ public class HospitalService {
                 .filter(item -> item.getId().equals(announcementId))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Anuncio no encontrado"));
+    }
+
+    /**
+     * Crea el administrador inicial del hospital con credenciales por defecto.
+     */
+    private void createAdminForHospital(HospitalDocument hospital, String adminEmail, LocalDateTime now) {
+        if (adminEmail == null || adminEmail.isBlank()) {
+            return;
+        }
+
+        boolean alreadyExists = userRepository.findByEmailIgnoreCase(adminEmail).isPresent();
+        if (alreadyExists) {
+            return;
+        }
+
+        String[] parts = adminEmail.split("@")[0].split("[._-]");
+        String firstName = parts.length > 0 && !parts[0].isBlank() ? capitalize(parts[0]) : "Admin";
+        String lastName = parts.length > 1 && !parts[1].isBlank() ? capitalize(parts[1]) : hospital.getName();
+
+        UserDocument admin = UserDocument.builder()
+                .id(UUID.randomUUID().toString())
+                .firstName(firstName)
+                .lastName(lastName)
+                .email(adminEmail)
+                .password("admin123")
+                .role(UserRole.HOSPITAL_ADMIN)
+                .enabled(true)
+                .accountNonLocked(true)
+                .hospitalId(hospital.getId())
+                .hospitalName(hospital.getName())
+                .department("Administracion")
+                .jobTitle("Administrador del hospital")
+                .createdAt(now.toString())
+                .updatedAt(now.toString())
+                .build();
+
+        userRepository.save(admin);
+        notificationService.createNotification(
+                admin.getId(),
+                NotificationType.NEW_ANNOUNCEMENT,
+                "Cuenta inicial creada. Credenciales temporales: " + adminEmail + " / admin123"
+        );
+    }
+
+    private String capitalize(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        return value.substring(0, 1).toUpperCase() + value.substring(1);
     }
 }

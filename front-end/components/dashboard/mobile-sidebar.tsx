@@ -1,6 +1,8 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
+import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Menu, Settings, LogOut, Building2 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
@@ -18,6 +20,7 @@ export function MobileSidebar() {
   const fullName = `${u?.firstName ?? u?.nombre ?? ''} ${u?.lastName ?? u?.apellidos ?? ''}`.trim();
   const initial = (u?.firstName?.[0] ?? u?.nombre?.[0] ?? '?').toUpperCase();
   const avatarUrl = u?.imageURL ?? u?.avatar ?? null;
+  const [avatarError, setAvatarError] = useState(false);
 
   return (
     <Sheet>
@@ -65,15 +68,15 @@ export function MobileSidebar() {
           <div className="border-t p-4">
             <div className="flex items-center gap-3 rounded-lg bg-sidebar-accent/50 p-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sidebar-primary text-sidebar-primary-foreground text-sm font-medium">
-                {avatarUrl ? (
-                  <img
+                {avatarUrl && !avatarError ? (
+                  <Image
                     src={avatarUrl}
                     alt="Avatar"
+                    width={36}
+                    height={36}
                     className="h-9 w-9 rounded-full object-cover"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).style.display = 'none';
-                      (e.currentTarget.parentElement as HTMLElement).innerText = initial;
-                    }}
+                    onError={() => setAvatarError(true)}
+                    unoptimized
                   />
                 ) : (
                   <span>{initial}</span>

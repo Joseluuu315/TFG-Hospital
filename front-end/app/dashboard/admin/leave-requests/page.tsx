@@ -19,6 +19,15 @@ interface RequestWithUser {
   request: LeaveRequest;
 }
 
+const getUserDisplayName = (user: UserType) =>
+  `${user.firstName ?? user.nombre ?? ''} ${user.lastName ?? user.apellidos ?? ''}`.trim() || 'Usuario';
+
+const getUserInitials = (user: UserType) => {
+  const first = (user.firstName ?? user.nombre ?? '?')[0] ?? '?';
+  const last = (user.lastName ?? user.apellidos ?? '')[0] ?? '';
+  return `${first}${last}`.toUpperCase();
+};
+
 const mockRequests: RequestWithUser[] = [
   {
     user: { id: '1', firstName: 'Maria', lastName: 'Garcia Lopez', email: 'maria@hospital.com', role: 'WORKER', enabled: true, accountNonLocked: true, department: 'UCI', jobTitle: 'Enfermera', createdAt: '', updatedAt: '' },
@@ -67,7 +76,7 @@ export default function AdminLeaveRequestsPage() {
     setIsSubmitting(true);
 
     try {
-      await leaveRequestsApi.review(selectedRequest.user.id, selectedRequest.request.id, {
+      await leaveRequestsApi.review(String(selectedRequest.user.id), selectedRequest.request.id, {
         status,
         reviewComment: reviewComment || undefined,
       });
@@ -130,11 +139,11 @@ export default function AdminLeaveRequestsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-medium shrink-0">
-            {item.user.firstName[0]}{item.user.lastName[0]}
+            {getUserInitials(item.user)}
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-medium">{item.user.firstName} {item.user.lastName}</p>
+              <p className="font-medium">{getUserDisplayName(item.user)}</p>
               {getStatusBadge(item.request.status)}
             </div>
             <p className="text-sm text-muted-foreground">{item.user.jobTitle} - {item.user.department}</p>
@@ -281,7 +290,7 @@ export default function AdminLeaveRequestsPage() {
             <DialogDescription>
               {selectedRequest && (
                 <>
-                  Solicitud de <strong>{selectedRequest.user.firstName} {selectedRequest.user.lastName}</strong> para{' '}
+                  Solicitud de <strong>{getUserDisplayName(selectedRequest.user)}</strong> para{' '}
                   {calculateDays(selectedRequest.request.startDate, selectedRequest.request.endDate)} dia(s) -{' '}
                   {selectedRequest.request.reason}
                 </>
