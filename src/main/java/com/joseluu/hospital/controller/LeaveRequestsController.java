@@ -4,6 +4,7 @@ import com.joseluu.hospital.dto.LeaveRequestReviewDto;
 import com.joseluu.hospital.dto.LeaveRequestStatus;
 import com.joseluu.hospital.dto.LeaveRequestWithUserDto;
 import com.joseluu.hospital.service.LeaveRequestService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -41,7 +42,7 @@ public class LeaveRequestsController {
     @PatchMapping("/{userId}/{requestId}")
     public LeaveRequestWithUserDto review(@PathVariable String userId,
                                           @PathVariable String requestId,
-                                          @RequestBody LeaveRequestReviewDto reviewDto) {
+                                          @Valid @RequestBody LeaveRequestReviewDto reviewDto) {
         return leaveRequestService.review(userId, requestId, reviewDto.getStatus(), reviewDto.getReviewComment());
     }
 }

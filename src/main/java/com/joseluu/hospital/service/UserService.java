@@ -10,6 +10,7 @@ import com.joseluu.hospital.entity.CalendarEventDocument;
 import com.joseluu.hospital.entity.HospitalDocument;
 import com.joseluu.hospital.entity.UserDocument;
 import com.joseluu.hospital.entity.enums.UserRole;
+import com.joseluu.hospital.exception.NotFoundException;
 import com.joseluu.hospital.repository.HospitalRepository;
 import com.joseluu.hospital.repository.LeaveRequestRepository;
 import com.joseluu.hospital.repository.UserRepository;
@@ -62,18 +63,26 @@ public class UserService {
      */
     public UserDto getById(String id) {
         return findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
     }
 
     /**
      * Obtiene los eventos de calendario de un usuario para un mes dado.
      */
     public List<CalendarEventDto> getCalendarEvents(String userId, String month) {
-        return userRepository.findById(userId)
-                .map(UserDocument::getCalendarEvents)
+        UserDocument user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+
+        return Optional.ofNullable(user.getCalendarEvents())
+                .orElse(Collections.emptyList())
                 .stream()
-                .flatMap(List::stream)
-                .filter(event -> month == null || event.getDate().startsWith(month))
+                .filter(event -> {
+                    if (month == null) {
+                        return true;
+                    }
+                    String date = event.getDate();
+                    return date != null && date.startsWith(month);
+                })
                 .map(this::toCalendarEvent)
                 .collect(Collectors.toList());
     }
@@ -117,7 +126,7 @@ public class UserService {
      */
     public UserDto updateUser(String userId, UpdateUserRequestDto request) {
         UserDocument user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
 
         if (request.getFirstName() != null) {
             user.setFirstName(request.getFirstName());

@@ -10,6 +10,7 @@ import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.service.AuthService;
 import com.joseluu.hospital.service.LeaveRequestService;
 import com.joseluu.hospital.service.UserService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -54,7 +55,7 @@ public class UsersController {
      * Crea un usuario trabajador.
      */
     @PostMapping
-    public UserDto create(@RequestBody CreateUserRequestDto request) {
+    public UserDto create(@Valid @RequestBody CreateUserRequestDto request) {
         return userService.createWorker(request);
     }
 
@@ -91,7 +92,7 @@ public class UsersController {
      */
     @PostMapping("/me/leave-requests")
     public LeaveRequestDto createLeaveRequest(@RequestHeader(name = "Authorization", required = false) String authorization,
-                                              @RequestBody LeaveRequestRequestDto requestDto) {
+                                              @Valid @RequestBody LeaveRequestRequestDto requestDto) {
         UserDto user = authService.getUserFromBearer(authorization);
         return leaveRequestService.createForUser(user.getId(), requestDto.getStartDate(), requestDto.getEndDate(), requestDto.getReason());
     }

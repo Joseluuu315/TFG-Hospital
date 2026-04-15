@@ -4,6 +4,8 @@ import com.joseluu.hospital.dto.PayrollDto;
 import com.joseluu.hospital.entity.PayrollDocument;
 import com.joseluu.hospital.entity.enums.NotificationType;
 import com.joseluu.hospital.entity.enums.PayrollStatus;
+import com.joseluu.hospital.exception.BadRequestException;
+import com.joseluu.hospital.exception.NotFoundException;
 import com.joseluu.hospital.repository.PayrollRepository;
 import org.springframework.stereotype.Service;
 
@@ -49,7 +51,7 @@ public class PayrollService {
     public PayrollDto getById(String id) {
         return payrollRepository.findById(id)
                 .map(this::toDto)
-                .orElseThrow(() -> new IllegalArgumentException("Nómina no encontrada"));
+                .orElseThrow(() -> new NotFoundException("Nómina no encontrada"));
     }
 
     /**
@@ -83,8 +85,11 @@ public class PayrollService {
      * Actualiza el estado de una nomina.
      */
     public PayrollDto updateStatus(String id, PayrollStatus status) {
+        if (status == null) {
+            throw new BadRequestException("El estado es obligatorio");
+        }
         PayrollDocument document = payrollRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Nómina no encontrada"));
+                .orElseThrow(() -> new NotFoundException("Nómina no encontrada"));
         document.setStatus(status);
         if (status == PayrollStatus.ACKNOWLEDGED) {
             document.setAcknowledgedAt(LocalDateTime.now().toString());
@@ -100,6 +105,7 @@ public class PayrollService {
      * Genera un PDF simple con la nomina.
      */
     public byte[] generatePdf(String id) {
+        payrollRepository.findById(id).orElseThrow(() -> new NotFoundException("Nómina no encontrada"));
         String text = "Nómina #" + id + " - " + LocalDateTime.now();
         return text.getBytes();
     }

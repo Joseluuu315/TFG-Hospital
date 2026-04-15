@@ -7,6 +7,7 @@ import com.joseluu.hospital.dto.SendMessageRequestDto;
 import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.service.AuthService;
 import com.joseluu.hospital.service.ChatService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -50,7 +51,7 @@ public class ChatController {
     @PostMapping("/{chatId}/messages")
     public ChatMessageDto sendMessage(@RequestHeader(name = "Authorization", required = false) String authorization,
                                       @PathVariable String chatId,
-                                      @RequestBody SendMessageRequestDto request) {
+                                      @Valid @RequestBody SendMessageRequestDto request) {
         UserDto user = authService.getUserFromBearer(authorization);
         return chatService.sendMessage(chatId, user.getId(), user.getNombre() + " " + user.getApellidos(), request.getContent());
     }
@@ -60,7 +61,7 @@ public class ChatController {
      */
     @PostMapping("/private")
     public ChatDto createPrivateChat(@RequestHeader(name = "Authorization", required = false) String authorization,
-                                     @RequestBody CreatePrivateChatRequestDto request) {
+                                     @Valid @RequestBody CreatePrivateChatRequestDto request) {
         UserDto user = authService.getUserFromBearer(authorization);
         return chatService.createPrivateChat(user.getId(), request.getUserId());
     }

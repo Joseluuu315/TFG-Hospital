@@ -7,6 +7,8 @@ import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.entity.LeaveRequestDocument;
 import com.joseluu.hospital.entity.enums.NotificationType;
 import com.joseluu.hospital.entity.enums.UserRole;
+import com.joseluu.hospital.exception.ForbiddenException;
+import com.joseluu.hospital.exception.NotFoundException;
 import com.joseluu.hospital.repository.LeaveRequestRepository;
 import org.springframework.stereotype.Service;
 
@@ -73,9 +75,9 @@ public class LeaveRequestService {
      */
     public LeaveRequestWithUserDto review(String userId, String requestId, LeaveRequestStatus status, String comment) {
         LeaveRequestDocument document = leaveRequestRepository.findById(requestId)
-                .orElseThrow(() -> new IllegalArgumentException("La solicitud no existe"));
+                .orElseThrow(() -> new NotFoundException("La solicitud no existe"));
         if (!document.getUserId().equals(userId)) {
-            throw new IllegalArgumentException("La solicitud no pertenece al usuario");
+            throw new ForbiddenException("La solicitud no pertenece al usuario");
         }
         document.setStatus(status);
         document.setReviewComment(comment);
