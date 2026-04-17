@@ -9,6 +9,7 @@ import com.joseluu.hospital.entity.UserDocument;
 import com.joseluu.hospital.entity.enums.HospitalStatus;
 import com.joseluu.hospital.entity.enums.NotificationType;
 import com.joseluu.hospital.entity.enums.UserRole;
+import com.joseluu.hospital.exception.NotFoundException;
 import com.joseluu.hospital.repository.HospitalRepository;
 import com.joseluu.hospital.repository.UserRepository;
 import org.springframework.stereotype.Service;
@@ -49,7 +50,7 @@ public class HospitalService {
     public HospitalDto getById(String id) {
         return hospitalRepository.findById(id)
                 .map(this::toDto)
-                .orElseThrow(() -> new IllegalArgumentException("Hospital no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
     }
 
     /**
@@ -77,7 +78,7 @@ public class HospitalService {
      */
     public HospitalDto updateStatus(String id, HospitalStatus status) {
         HospitalDocument document = hospitalRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Hospital no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
         document.setStatus(status);
         document.setUpdatedAt(LocalDateTime.now().toString());
         return toDto(hospitalRepository.save(document));
@@ -88,7 +89,7 @@ public class HospitalService {
      */
     public HospitalDto update(String id, HospitalDto update) {
         HospitalDocument document = hospitalRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Hospital no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
         document.setName(update.getName());
         document.setAddress(update.getAddress());
         document.setCity(update.getCity());
@@ -102,6 +103,9 @@ public class HospitalService {
      * Elimina un hospital por id.
      */
     public void delete(String id) {
+        if (!hospitalRepository.existsById(id)) {
+            throw new NotFoundException("Hospital no encontrado");
+        }
         hospitalRepository.deleteById(id);
     }
 
@@ -110,7 +114,7 @@ public class HospitalService {
      */
     public AnnouncementDto addAnnouncement(String hospitalId, AnnouncementDto request, String authorId) {
         HospitalDocument document = hospitalRepository.findById(hospitalId)
-                .orElseThrow(() -> new IllegalArgumentException("Hospital no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
 
         List<AnnouncementDocument> announcements = document.getAnnouncements() == null
                 ? new ArrayList<>()
@@ -148,7 +152,7 @@ public class HospitalService {
      */
     public AnnouncementDto updateAnnouncement(String hospitalId, String announcementId, AnnouncementDto request) {
         HospitalDocument document = hospitalRepository.findById(hospitalId)
-                .orElseThrow(() -> new IllegalArgumentException("Hospital no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
 
         AnnouncementDocument announcement = requireAnnouncement(document, announcementId);
         announcement.setTitle(request.getTitle());
@@ -166,7 +170,8 @@ public class HospitalService {
      */
     public void deleteAnnouncement(String hospitalId, String announcementId) {
         HospitalDocument document = hospitalRepository.findById(hospitalId)
-                .orElseThrow(() -> new IllegalArgumentException("Hospital no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
+        requireAnnouncement(document, announcementId);
         document.setAnnouncements(document.getAnnouncements().stream()
                 .filter(item -> !item.getId().equals(announcementId))
                 .collect(Collectors.toList()));
@@ -226,11 +231,11 @@ public class HospitalService {
      */
     private AnnouncementDocument requireAnnouncement(HospitalDocument document, String announcementId) {
         if (document.getAnnouncements() == null) {
-            throw new IllegalArgumentException("Anuncio no encontrado");
+            throw new NotFoundException("Anuncio no encontrado");
         }
         return document.getAnnouncements().stream()
                 .filter(item -> item.getId().equals(announcementId))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Anuncio no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Anuncio no encontrado"));
     }
 }

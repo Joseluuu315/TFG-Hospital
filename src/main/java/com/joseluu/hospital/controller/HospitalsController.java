@@ -7,7 +7,12 @@ import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.entity.enums.HospitalStatus;
 import com.joseluu.hospital.service.AuthService;
 import com.joseluu.hospital.service.HospitalService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,6 +22,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/hospitals")
+@Validated
 public class HospitalsController {
     private final HospitalService hospitalService;
     private final AuthService authService;
@@ -30,6 +36,7 @@ public class HospitalsController {
      * Lista todos los hospitales registrados.
      */
     @GetMapping
+    @ResponseStatus(HttpStatus.OK)
     public List<HospitalDto> getAll() {
         return hospitalService.getAll();
     }
@@ -38,7 +45,8 @@ public class HospitalsController {
      * Obtiene un hospital por su identificador.
      */
     @GetMapping("/{id}")
-    public HospitalDto getById(@PathVariable String id) {
+    @ResponseStatus(HttpStatus.OK)
+    public HospitalDto getById(@PathVariable @NotBlank(message = "El id es obligatorio") String id) {
         return hospitalService.getById(id);
     }
 
@@ -46,7 +54,8 @@ public class HospitalsController {
      * Crea un hospital con el administrador asignado.
      */
     @PostMapping
-    public HospitalDto create(@RequestBody CreateHospitalRequestDto request) {
+    @ResponseStatus(HttpStatus.CREATED)
+    public HospitalDto create(@Valid @RequestBody CreateHospitalRequestDto request) {
         return hospitalService.create(request);
     }
 
@@ -54,7 +63,9 @@ public class HospitalsController {
      * Actualiza datos generales de un hospital.
      */
     @PutMapping("/{id}")
-    public HospitalDto update(@PathVariable String id, @RequestBody HospitalDto payload) {
+    @ResponseStatus(HttpStatus.OK)
+    public HospitalDto update(@PathVariable @NotBlank(message = "El id es obligatorio") String id,
+                              @Valid @RequestBody HospitalDto payload) {
         return hospitalService.update(id, payload);
     }
 
@@ -62,7 +73,9 @@ public class HospitalsController {
      * Cambia el estado (activo, suspendido, etc.) de un hospital.
      */
     @PatchMapping("/{id}/status")
-    public HospitalDto updateStatus(@PathVariable String id, @RequestBody StatusUpdate request) {
+    @ResponseStatus(HttpStatus.OK)
+    public HospitalDto updateStatus(@PathVariable @NotBlank(message = "El id es obligatorio") String id,
+                                    @Valid @RequestBody StatusUpdate request) {
         return hospitalService.updateStatus(id, request.getStatus());
     }
 
@@ -70,7 +83,7 @@ public class HospitalsController {
      * Elimina un hospital y los datos asociados.
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable String id) {
+    public ResponseEntity<Void> delete(@PathVariable @NotBlank(message = "El id es obligatorio") String id) {
         hospitalService.delete(id);
         return ResponseEntity.noContent().build();
     }
@@ -79,10 +92,12 @@ public class HospitalsController {
      * Agrega un anuncio a un hospital.
      */
     @PostMapping("/{id}/announcements")
+    @ResponseStatus(HttpStatus.CREATED)
     public AnnouncementDto addAnnouncement(@RequestHeader(name = "Authorization", required = false) String authorization,
-                                           @PathVariable String id,
-                                           @RequestBody AnnouncementDto request) {
+                                           @PathVariable @NotBlank(message = "El id es obligatorio") String id,
+                                           @Valid @RequestBody AnnouncementDto request) {
         UserDto user = authService.getUserFromBearer(authorization);
+        validateAnnouncement(request);
         return hospitalService.addAnnouncement(id, request, user.getId());
     }
 
@@ -90,9 +105,11 @@ public class HospitalsController {
      * Actualiza un anuncio de un hospital.
      */
     @PutMapping("/{id}/announcements/{announcementId}")
-    public AnnouncementDto updateAnnouncement(@PathVariable String id,
-                                              @PathVariable String announcementId,
-                                              @RequestBody AnnouncementDto request) {
+    @ResponseStatus(HttpStatus.OK)
+    public AnnouncementDto updateAnnouncement(@PathVariable @NotBlank(message = "El id es obligatorio") String id,
+                                              @PathVariable @NotBlank(message = "El announcementId es obligatorio") String announcementId,
+                                              @Valid @RequestBody AnnouncementDto request) {
+        validateAnnouncement(request);
         return hospitalService.updateAnnouncement(id, announcementId, request);
     }
 
@@ -100,16 +117,29 @@ public class HospitalsController {
      * Elimina un anuncio de un hospital.
      */
     @DeleteMapping("/{id}/announcements/{announcementId}")
-    public ResponseEntity<Void> deleteAnnouncement(@PathVariable String id,
-                                                   @PathVariable String announcementId) {
+    public ResponseEntity<Void> deleteAnnouncement(@PathVariable @NotBlank(message = "El id es obligatorio") String id,
+                                                   @PathVariable @NotBlank(message = "El announcementId es obligatorio") String announcementId) {
         hospitalService.deleteAnnouncement(id, announcementId);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Verifica los campos obligatorios de un anuncio.
+     */
+    private void validateAnnouncement(AnnouncementDto request) {
+        if (request.getTitle() == null || request.getTitle().isBlank()) {
+            throw new IllegalArgumentException("El titulo del anuncio es obligatorio");
+        }
+        if (request.getContent() == null || request.getContent().isBlank()) {
+            throw new IllegalArgumentException("El contenido del anuncio es obligatorio");
+        }
     }
 
     /**
      * Payload minimo para cambios de estado.
      */
     public static class StatusUpdate {
+        @NotNull(message = "El estado es obligatorio")
         private HospitalStatus status;
 
         public HospitalStatus getStatus() {

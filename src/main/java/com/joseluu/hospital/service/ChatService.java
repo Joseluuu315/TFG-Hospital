@@ -7,6 +7,7 @@ import com.joseluu.hospital.entity.ChatMessageDocument;
 import com.joseluu.hospital.entity.UserDocument;
 import com.joseluu.hospital.entity.enums.ChatType;
 import com.joseluu.hospital.entity.enums.NotificationType;
+import com.joseluu.hospital.exception.NotFoundException;
 import com.joseluu.hospital.repository.ChatMessageRepository;
 import com.joseluu.hospital.repository.ChatRepository;
 import com.joseluu.hospital.repository.UserRepository;
@@ -66,7 +67,7 @@ public class ChatService {
      */
     public ChatMessageDto sendMessage(String chatId, String senderId, String senderName, String content) {
         ChatDocument chat = chatRepository.findById(chatId)
-                .orElseThrow(() -> new IllegalArgumentException("Chat no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Chat no encontrado"));
 
         // Obtener la imagen del remitente
         String senderImageURL = userRepository.findById(senderId)
@@ -188,7 +189,7 @@ public class ChatService {
      */
     public void updateGroupParticipants(String chatId, List<String> participantIds) {
         ChatDocument chat = chatRepository.findById(chatId)
-                .orElseThrow(() -> new IllegalArgumentException("Chat no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Chat no encontrado"));
 
         List<UserDocument> users = userRepository.findAllById(participantIds);
         chat.setParticipants(participantIds);

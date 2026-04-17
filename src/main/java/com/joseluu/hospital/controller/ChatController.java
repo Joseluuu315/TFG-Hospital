@@ -7,6 +7,10 @@ import com.joseluu.hospital.dto.SendMessageRequestDto;
 import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.service.AuthService;
 import com.joseluu.hospital.service.ChatService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import org.springframework.http.HttpStatus;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,6 +20,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/chats")
+@Validated
 public class ChatController {
     private final ChatService chatService;
     private final AuthService authService;
@@ -29,6 +34,7 @@ public class ChatController {
      * Lista los chats del usuario autenticado.
      */
     @GetMapping
+    @ResponseStatus(HttpStatus.OK)
     public List<ChatDto> getMyChats(@RequestHeader(name = "Authorization", required = false) String authorization) {
         UserDto user = authService.getUserFromBearer(authorization);
         return chatService.getChatsForUser(user.getId());
@@ -38,8 +44,9 @@ public class ChatController {
      * Devuelve los mensajes del chat solicitado.
      */
     @GetMapping("/{chatId}/messages")
+    @ResponseStatus(HttpStatus.OK)
     public List<ChatMessageDto> getMessages(@RequestHeader(name = "Authorization", required = false) String authorization,
-                                            @PathVariable String chatId) {
+                                            @PathVariable @NotBlank(message = "El chatId es obligatorio") String chatId) {
         authService.getUserFromBearer(authorization);
         return chatService.getMessages(chatId);
     }
@@ -48,9 +55,10 @@ public class ChatController {
      * Envía un mensaje en el chat.
      */
     @PostMapping("/{chatId}/messages")
+    @ResponseStatus(HttpStatus.CREATED)
     public ChatMessageDto sendMessage(@RequestHeader(name = "Authorization", required = false) String authorization,
-                                      @PathVariable String chatId,
-                                      @RequestBody SendMessageRequestDto request) {
+                                      @PathVariable @NotBlank(message = "El chatId es obligatorio") String chatId,
+                                      @Valid @RequestBody SendMessageRequestDto request) {
         UserDto user = authService.getUserFromBearer(authorization);
         return chatService.sendMessage(chatId, user.getId(), user.getNombre() + " " + user.getApellidos(), request.getContent());
     }
@@ -59,9 +67,13 @@ public class ChatController {
      * Abre un chat privado entre el usuario actual y el indicado.
      */
     @PostMapping("/private")
+    @ResponseStatus(HttpStatus.CREATED)
     public ChatDto createPrivateChat(@RequestHeader(name = "Authorization", required = false) String authorization,
-                                     @RequestBody CreatePrivateChatRequestDto request) {
+                                     @Valid @RequestBody CreatePrivateChatRequestDto request) {
         UserDto user = authService.getUserFromBearer(authorization);
+        if (user.getId().equals(request.getUserId())) {
+            throw new IllegalArgumentException("No se puede crear un chat privado consigo mismo");
+        }
         return chatService.createPrivateChat(user.getId(), request.getUserId());
     }
 
@@ -69,8 +81,9 @@ public class ChatController {
      * Marca como leídos los mensajes del chat para el usuario actual.
      */
     @PatchMapping("/{chatId}/read")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     public void markAsRead(@RequestHeader(name = "Authorization", required = false) String authorization,
-                           @PathVariable String chatId) {
+                           @PathVariable @NotBlank(message = "El chatId es obligatorio") String chatId) {
         UserDto user = authService.getUserFromBearer(authorization);
         chatService.markAsRead(chatId, user.getId());
     }
