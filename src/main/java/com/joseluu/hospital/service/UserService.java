@@ -92,7 +92,8 @@ public class UserService {
      */
     public UserDto createWorker(CreateUserRequestDto request) {
         LocalDateTime now = LocalDateTime.now();
-        Optional<HospitalDocument> hospital = hospitalRepository.findAll().stream().findFirst();
+        HospitalDocument hospital = hospitalRepository.findById(request.getHospitalId())
+                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
 
         UserDocument document = UserDocument.builder()
                 .id(UUID.randomUUID().toString())
@@ -105,8 +106,8 @@ public class UserService {
                 .role(UserRole.WORKER)
                 .enabled(true)
                 .accountNonLocked(true)
-                .hospitalId(hospital.map(HospitalDocument::getId).orElse(null))
-                .hospitalName(hospital.map(HospitalDocument::getName).orElse(null))
+                .hospitalId(hospital.getId())
+                .hospitalName(hospital.getName())
                 .department(request.getDepartment())
                 .jobTitle(request.getJobTitle())
                 .baseSalary(request.getBaseSalary())
@@ -218,9 +219,12 @@ public class UserService {
         return LeaveRequestDto.builder()
                 .id(document.getId())
                 .userId(document.getUserId())
+                .hospitalId(document.getHospitalId())
                 .startDate(document.getStartDate())
                 .endDate(document.getEndDate())
                 .reason(document.getReason())
+                .leaveType(document.getLeaveType())
+                .paid(document.isPaid())
                 .status(document.getStatus())
                 .requestedAt(document.getRequestedAt())
                 .reviewedAt(document.getReviewedAt())

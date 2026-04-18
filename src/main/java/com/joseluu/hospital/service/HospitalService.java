@@ -39,6 +39,9 @@ public class HospitalService {
     private final WorkGroupRepository workGroupRepository;
     private final ChatRepository chatRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final HospitalSettingsService hospitalSettingsService;
+    private final AuditLogService auditLogService;
+    private final ShiftTypeService shiftTypeService;
 
     public HospitalService(HospitalRepository hospitalRepository,
                            UserRepository userRepository,
@@ -47,7 +50,10 @@ public class HospitalService {
                            LeaveRequestRepository leaveRequestRepository,
                            WorkGroupRepository workGroupRepository,
                            ChatRepository chatRepository,
-                           ChatMessageRepository chatMessageRepository) {
+                           ChatMessageRepository chatMessageRepository,
+                           HospitalSettingsService hospitalSettingsService,
+                           AuditLogService auditLogService,
+                           ShiftTypeService shiftTypeService) {
         this.hospitalRepository = hospitalRepository;
         this.userRepository = userRepository;
         this.notificationService = notificationService;
@@ -56,6 +62,9 @@ public class HospitalService {
         this.workGroupRepository = workGroupRepository;
         this.chatRepository = chatRepository;
         this.chatMessageRepository = chatMessageRepository;
+        this.hospitalSettingsService = hospitalSettingsService;
+        this.auditLogService = auditLogService;
+        this.shiftTypeService = shiftTypeService;
     }
 
     /**
@@ -97,6 +106,10 @@ public class HospitalService {
         HospitalDocument savedHospital = hospitalRepository.save(document);
 
         createAdminForHospital(savedHospital, request.getAdminEmail(), now);
+        hospitalSettingsService.seedDefaults(savedHospital.getId());
+        shiftTypeService.seedDefaults(savedHospital.getId());
+        auditLogService.log(savedHospital.getId(), null, "HOSPITAL_CREATED", "hospitals", savedHospital.getId(),
+                "Hospital creado con administrador inicial");
 
         return toDto(savedHospital);
     }

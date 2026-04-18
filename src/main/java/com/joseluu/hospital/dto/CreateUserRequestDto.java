@@ -17,6 +17,8 @@ public class CreateUserRequestDto {
     private String email;
     private String phone;
     private String dni;
+    @NotBlank(message = "El hospital es obligatorio")
+    private String hospitalId;
     private String department;
     private String jobTitle;
     @PositiveOrZero(message = "El salario base debe ser mayor o igual a 0")

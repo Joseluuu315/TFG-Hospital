@@ -56,17 +56,26 @@ public class LeaveRequestService {
      * Crea una nueva solicitud para un usuario.
      */
     public LeaveRequestDto createForUser(String userId, String startDate, String endDate, String reason) {
+        UserDto user = userService.getById(userId);
         LeaveRequestDocument document = LeaveRequestDocument.builder()
                 .id(UUID.randomUUID().toString())
                 .userId(userId)
+                .hospitalId(user.getHospitalId())
                 .startDate(startDate)
                 .endDate(endDate)
                 .reason(reason)
+                .leaveType("VACATION")
+                .paid(true)
                 .status(LeaveRequestStatus.PENDING)
                 .requestedAt(LocalDateTime.now().toString())
                 .build();
         LeaveRequestDto dto = toDto(leaveRequestRepository.save(document));
         notificationService.createNotificationForRole(UserRole.ROOT, NotificationType.NEW_LEAVE_REQUEST, "Nueva solicitud de ausencia");
+        userService.getAll().stream()
+                .filter(candidate -> candidate.getRole() == UserRole.HOSPITAL_ADMIN)
+                .filter(candidate -> user.getHospitalId() != null && user.getHospitalId().equals(candidate.getHospitalId()))
+                .forEach(candidate -> notificationService.createNotification(candidate.getId(), NotificationType.NEW_LEAVE_REQUEST,
+                        "Nueva solicitud de ausencia de " + user.getFirstName() + " " + user.getLastName()));
         return dto;
     }
 
@@ -100,9 +109,12 @@ public class LeaveRequestService {
         return LeaveRequestDto.builder()
                 .id(document.getId())
                 .userId(document.getUserId())
+                .hospitalId(document.getHospitalId())
                 .startDate(document.getStartDate())
                 .endDate(document.getEndDate())
                 .reason(document.getReason())
+                .leaveType(document.getLeaveType())
+                .paid(document.isPaid())
                 .status(document.getStatus())
                 .requestedAt(document.getRequestedAt())
                 .reviewedAt(document.getReviewedAt())
