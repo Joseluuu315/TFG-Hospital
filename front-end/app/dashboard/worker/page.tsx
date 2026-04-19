@@ -11,14 +11,14 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import {
   payrollsApi,
+  schedulingApi,
   usersApi,
   hospitalsApi,
-  type CalendarEvent,
   type LeaveRequest,
   type Payroll,
   type Announcement,
-  type CalendarEventType,
   type LeaveRequestStatus,
+  type ShiftAssignment,
 } from '@/lib/api';
 import {
   formatCurrency,
@@ -27,6 +27,8 @@ import {
   formatWeekday,
   getDisplayName,
 } from '@/lib/formatters';
+
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 
 const fallbackAnnouncements: Announcement[] = [
   {
@@ -40,25 +42,12 @@ const fallbackAnnouncements: Announcement[] = [
   },
 ];
 
-type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
-
 const STAT_TONES = {
   blue: 'bg-blue-500/15 text-blue-600',
   emerald: 'bg-emerald-500/15 text-emerald-600',
   amber: 'bg-amber-500/15 text-amber-600',
   violet: 'bg-violet-500/15 text-violet-600',
 } as const;
-
-const EVENT_BADGES: Record<
-  CalendarEventType,
-  { label: string; variant?: BadgeVariant; className?: string }
-> = {
-  SHIFT: { label: 'Turno', variant: 'default', className: 'bg-blue-500/15 text-blue-600' },
-  DAY_OFF: { label: 'Dia Libre', variant: 'default', className: 'bg-emerald-500/15 text-emerald-600' },
-  HOLIDAY: { label: 'Festivo', variant: 'default', className: 'bg-amber-500/15 text-amber-600' },
-  VACATION: { label: 'Vacaciones', variant: 'default', className: 'bg-violet-500/15 text-violet-600' },
-  SICK_LEAVE: { label: 'Baja', variant: 'destructive' },
-};
 
 const REQUEST_BADGES: Record<
   LeaveRequestStatus,
@@ -83,7 +72,7 @@ const renderBadge = (config: { label: string; variant?: BadgeVariant; className?
 
 export default function WorkerDashboard() {
   const { user } = useAuth();
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [shifts, setShifts] = useState<ShiftAssignment[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>(fallbackAnnouncements);
@@ -99,10 +88,10 @@ export default function WorkerDashboard() {
 
     const loadData = async () => {
       try {
-        const calendarRes = await usersApi.getMyCalendar(new Date().toISOString().slice(0, 7));
+        const shiftsRes = await schedulingApi.getMyShifts();
         const leaveRes = await usersApi.getMyLeaveRequests();
         const payrollRes = await payrollsApi.getMyPayrolls();
-        setCalendarEvents(calendarRes.data);
+        setShifts(shiftsRes.data);
         setLeaveRequests(leaveRes.data);
         setPayrolls(payrollRes.data);
         if (user?.hospitalId) {
@@ -127,10 +116,10 @@ export default function WorkerDashboard() {
 
   const todayIso = new Date().toISOString().split('T')[0];
   const now = new Date();
-  const todayEvents = calendarEvents.filter((event) => event.date === todayIso);
-  const upcomingEvents = calendarEvents
-    .filter((event) => new Date(event.date) > now)
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  const todayEvents = shifts.filter((shift) => shift.startAt.startsWith(todayIso));
+  const upcomingEvents = shifts
+    .filter((shift) => new Date(shift.startAt) > now)
+    .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime())
     .slice(0, 5);
 
   const pendingLeaveCount = leaveRequests.filter((request) => request.status === 'PENDING').length;
@@ -145,9 +134,9 @@ export default function WorkerDashboard() {
         todayEvents.length > 0 ? (
           <>
             <div className="text-2xl font-bold">
-              {todayEvents[0].startTime} - {todayEvents[0].endTime}
+              {new Date(todayEvents[0].startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(todayEvents[0].endAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
             </div>
-            <p className="text-xs text-muted-foreground">{todayEvents[0].notes}</p>
+            <p className="text-xs text-muted-foreground">{todayEvents[0].department} · {todayEvents[0].shiftTypeCode}</p>
           </>
         ) : (
           <>
@@ -239,7 +228,7 @@ export default function WorkerDashboard() {
             ) : (
               <div className="space-y-3">
                 {upcomingEvents.map((event) => {
-                  const eventDate = new Date(event.date);
+                  const eventDate = new Date(event.startAt);
                   return (
                     <div
                       key={event.id}
@@ -253,18 +242,14 @@ export default function WorkerDashboard() {
                           <p className="text-lg font-bold">{eventDate.getDate()}</p>
                         </div>
                         <div>
-                          {event.startTime && event.endTime ? (
-                            <p className="font-medium text-sm">
-                              {event.startTime} - {event.endTime}
-                            </p>
-                          ) : (
-                            <p className="font-medium text-sm">Todo el dia</p>
-                          )}
-                          <p className="text-xs text-muted-foreground">{event.notes}</p>
+                          <p className="font-medium text-sm">
+                            {new Date(event.startAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(event.endAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{event.department} · {event.shiftTypeCode}</p>
                         </div>
                       </div>
                       <div className="self-start sm:self-auto">
-                        {renderBadge(EVENT_BADGES[event.type])}
+                        {renderBadge({ label: event.shiftTypeCode, variant: 'outline', className: 'bg-blue-500/15 text-blue-600' })}
                       </div>
                     </div>
                   );

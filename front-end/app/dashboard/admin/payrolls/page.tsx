@@ -1,211 +1,168 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useAuth } from '@/contexts/auth-context';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { DashboardLoading } from '@/components/dashboard/dashboard-loading';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FileText, Plus, Search, Download, Send, Eye } from 'lucide-react';
-import { payrollsApi, usersApi, type Payroll, type User } from '@/lib/api';
+import { Download, Eye, FileText, Plus, Search, Send, SlidersHorizontal } from 'lucide-react';
+import {
+  advancedPayrollApi,
+  payrollsApi,
+  usersApi,
+  type Payroll,
+  type PayrollAdjustment,
+  type PayrollItem,
+  type User,
+} from '@/lib/api';
 import { toast } from 'sonner';
 import { formatCurrency, formatMonthYear } from '@/lib/formatters';
 
-const mockPayrolls: Payroll[] = [
-  {
-    id: '1',
-    workerId: '1',
-    workerFullName: 'Maria Garcia Lopez',
-    hospitalId: '1',
-    period: '2025-06',
-    grossSalary: 2500,
-    socialSecurityWorker: 158.75,
-    incomeTaxWithholding: 375,
-    otherDeductions: 0,
-    netSalary: 1966.25,
-    overtimeAmount: 0,
-    bonusAmount: 0,
-    status: 'ISSUED',
-    issuedAt: '2025-06-25T10:00:00',
-  },
-  {
-    id: '2',
-    workerId: '2',
-    workerFullName: 'Juan Martinez Ruiz',
-    hospitalId: '1',
-    period: '2025-06',
-    grossSalary: 4500,
-    socialSecurityWorker: 285.75,
-    incomeTaxWithholding: 900,
-    otherDeductions: 0,
-    netSalary: 3314.25,
-    overtimeAmount: 200,
-    bonusAmount: 0,
-    status: 'DRAFT',
-    issuedAt: '2025-06-25T10:00:00',
-  },
-  {
-    id: '3',
-    workerId: '3',
-    workerFullName: 'Ana Fernandez Diaz',
-    hospitalId: '1',
-    period: '2025-06',
-    grossSalary: 4200,
-    socialSecurityWorker: 266.70,
-    incomeTaxWithholding: 756,
-    otherDeductions: 50,
-    netSalary: 3127.30,
-    overtimeAmount: 0,
-    bonusAmount: 100,
-    status: 'ACKNOWLEDGED',
-    acknowledgedAt: '2025-06-26T14:30:00',
-    issuedAt: '2025-06-25T10:00:00',
-  },
-];
+const initialGenerateForm = {
+  workerId: '',
+  period: new Date().toISOString().slice(0, 7),
+};
 
-const mockWorkers: User[] = [
-  { id: '1', firstName: 'Maria', lastName: 'Garcia Lopez', email: 'maria@hospital.com', role: 'WORKER', enabled: true, accountNonLocked: true, baseSalary: 2500, createdAt: '', updatedAt: '' },
-  { id: '2', firstName: 'Juan', lastName: 'Martinez Ruiz', email: 'juan@hospital.com', role: 'WORKER', enabled: true, accountNonLocked: true, baseSalary: 4500, createdAt: '', updatedAt: '' },
-  { id: '3', firstName: 'Ana', lastName: 'Fernandez Diaz', email: 'ana@hospital.com', role: 'WORKER', enabled: true, accountNonLocked: true, baseSalary: 4200, createdAt: '', updatedAt: '' },
-];
+const initialAdjustmentForm = {
+  workerId: '',
+  period: new Date().toISOString().slice(0, 7),
+  type: 'BONUS' as 'BONUS' | 'PENALTY',
+  description: '',
+  amount: '',
+};
 
 export default function PayrollsPage() {
+  const { user } = useAuth();
+  const hospitalId = String(user?.hospitalId ?? '');
+  const actorId = String(user?.id ?? '');
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
   const [workers, setWorkers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [periodFilter, setPeriodFilter] = useState<string>('2025-06');
+  const [periodFilter, setPeriodFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isGenerateOpen, setIsGenerateOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isAdjustmentOpen, setIsAdjustmentOpen] = useState(false);
   const [selectedPayroll, setSelectedPayroll] = useState<Payroll | null>(null);
+  const [selectedItems, setSelectedItems] = useState<PayrollItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPublishing, setIsPublishing] = useState<string | null>(null);
+  const [generateForm, setGenerateForm] = useState(initialGenerateForm);
+  const [adjustmentForm, setAdjustmentForm] = useState(initialAdjustmentForm);
 
-  const [formData, setFormData] = useState({
-    workerId: '',
-    period: '2025-06',
-    grossSalary: '',
-    overtimeAmount: '0',
-    bonusAmount: '0',
-    otherDeductions: '0',
-  });
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const [payrollsRes, workersRes] = await Promise.all([
-        payrollsApi.getAll(),
-        usersApi.getAll(),
-      ]);
-      setPayrolls(payrollsRes.data);
-      setWorkers(workersRes.data.filter(u => u.role === 'WORKER'));
-    } catch {
-      console.log('[averonix] Backend no disponible, usando datos de ejemplo');
-      setPayrolls(mockPayrolls);
-      setWorkers(mockWorkers);
+      const [payrollsRes, workersRes] = await Promise.all([payrollsApi.getAll(), usersApi.getAll()]);
+      setPayrolls(payrollsRes.data.filter((item) => item.hospitalId === hospitalId));
+      setWorkers(workersRes.data.filter((item) => item.role === 'WORKER' && String(item.hospitalId) === hospitalId));
+    } catch (error) {
+      console.error(error);
+      toast.error('No se pudieron cargar las nóminas');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [hospitalId]);
 
-  const calculateNetSalary = () => {
-    const gross = Number(formData.grossSalary) || 0;
-    const overtime = Number(formData.overtimeAmount) || 0;
-    const bonus = Number(formData.bonusAmount) || 0;
-    const total = gross + overtime + bonus;
-    const ss = total * 0.0635;
-    const irpf = total * 0.15;
-    const other = Number(formData.otherDeductions) || 0;
-    return total - ss - irpf - other;
-  };
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
 
-  const handleCreatePayroll = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleGeneratePayroll = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!hospitalId) return;
     setIsSubmitting(true);
-
-    const selectedWorker = workers.find(w => w.id === formData.workerId);
-    const gross = Number(formData.grossSalary);
-    const overtime = Number(formData.overtimeAmount);
-    const bonus = Number(formData.bonusAmount);
-    const total = gross + overtime + bonus;
-
-    const payrollData: Partial<Payroll> = {
-      workerId: formData.workerId,
-      workerFullName: `${selectedWorker?.firstName} ${selectedWorker?.lastName}`,
-      period: formData.period,
-      grossSalary: gross,
-      socialSecurityWorker: total * 0.0635,
-      incomeTaxWithholding: total * 0.15,
-      otherDeductions: Number(formData.otherDeductions),
-      overtimeAmount: overtime,
-      bonusAmount: bonus,
-      netSalary: calculateNetSalary(),
-      status: 'DRAFT',
-    };
-
     try {
-      await payrollsApi.create(payrollData);
-      toast.success('Nomina creada correctamente');
-      setIsCreateDialogOpen(false);
-      fetchData();
-    } catch {
-      // Mock para prototipo
-      const newPayroll: Payroll = {
-        id: String(Date.now()),
-        ...payrollData,
-        hospitalId: '1',
-        issuedAt: new Date().toISOString(),
-      } as Payroll;
-      setPayrolls([newPayroll, ...payrolls]);
-      toast.success('Nomina creada correctamente (modo demo)');
-      setIsCreateDialogOpen(false);
+      await advancedPayrollApi.generate(hospitalId, generateForm);
+      toast.success('Nómina generada correctamente');
+      setIsGenerateOpen(false);
+      setGenerateForm(initialGenerateForm);
+      await fetchData();
+    } catch (error) {
+      console.error(error);
+      toast.error('No se pudo generar la nómina');
     } finally {
       setIsSubmitting(false);
-      setFormData({ workerId: '', period: '2025-06', grossSalary: '', overtimeAmount: '0', bonusAmount: '0', otherDeductions: '0' });
+    }
+  };
+
+  const handleCreateAdjustment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!hospitalId || !actorId) return;
+    setIsSubmitting(true);
+    try {
+      const payload: PayrollAdjustment = {
+        hospitalId,
+        workerId: adjustmentForm.workerId,
+        period: adjustmentForm.period,
+        type: adjustmentForm.type,
+        description: adjustmentForm.description,
+        amount: Number(adjustmentForm.amount),
+        createdBy: actorId,
+      };
+      await advancedPayrollApi.createAdjustment(payload);
+      toast.success('Ajuste guardado');
+      setIsAdjustmentOpen(false);
+      setAdjustmentForm(initialAdjustmentForm);
+    } catch (error) {
+      console.error(error);
+      toast.error('No se pudo guardar el ajuste');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handlePublishPayroll = async (payrollId: string) => {
+    setIsPublishing(payrollId);
     try {
       await payrollsApi.updateStatus(payrollId, 'ISSUED');
-      setPayrolls(payrolls.map(p => p.id === payrollId ? { ...p, status: 'ISSUED' } : p));
-      toast.success('Nomina publicada correctamente');
-    } catch {
-      setPayrolls(payrolls.map(p => p.id === payrollId ? { ...p, status: 'ISSUED' } : p));
-      toast.success('Nomina publicada correctamente (modo demo)');
+      setPayrolls((current) => current.map((item) => (item.id === payrollId ? { ...item, status: 'ISSUED' } : item)));
+      toast.success('Nómina emitida');
+    } catch (error) {
+      console.error(error);
+      toast.error('No se pudo emitir la nómina');
+    } finally {
+      setIsPublishing(null);
     }
   };
 
   const handleDownload = async (payroll: Payroll) => {
     try {
       await payrollsApi.downloadPdf(payroll.id);
-      toast.success('Nomina descargada correctamente');
-    } catch {
-      toast.success('Nomina descargada correctamente (modo demo)');
+      toast.success('Descarga iniciada');
+    } catch (error) {
+      console.error(error);
+      toast.error('No se pudo descargar el PDF');
     }
   };
 
-  const openPayrollDetail = (payroll: Payroll) => {
+  const openPayrollDetail = async (payroll: Payroll) => {
     setSelectedPayroll(payroll);
     setIsDetailOpen(true);
+    try {
+      const response = await advancedPayrollApi.getItems(payroll.id);
+      setSelectedItems(response.data);
+    } catch (error) {
+      console.error(error);
+      setSelectedItems([]);
+      toast.error('No se pudieron cargar las líneas de nómina');
+    }
   };
-
-  const getInitialsFromName = (fullName: string) =>
-    fullName
-      .split(' ')
-      .filter(Boolean)
-      .map((part) => part[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase();
 
   const filteredPayrolls = payrolls.filter((payroll) => {
     const matchesSearch = payroll.workerFullName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -232,31 +189,14 @@ export default function PayrollsPage() {
   }
 
   return (
-    <DashboardShell
-      title="Gestion de Nominas"
-      description="Emite y gestiona las nominas de los trabajadores"
-    >
+    <DashboardShell title="Gestión de nóminas" description="Generación avanzada, ajustes manuales y detalle por conceptos">
       <div className="flex flex-col gap-4 rounded-xl border bg-background/70 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por trabajador..."
-              className="pl-9"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+            <Input placeholder="Buscar por trabajador..." className="pl-9" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
-          <Select value={periodFilter} onValueChange={setPeriodFilter}>
-            <SelectTrigger className="w-full sm:w-36">
-              <SelectValue placeholder="Periodo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="2025-06">Junio 2025</SelectItem>
-              <SelectItem value="2025-05">Mayo 2025</SelectItem>
-              <SelectItem value="2025-04">Abril 2025</SelectItem>
-            </SelectContent>
-          </Select>
+          <Input type="month" className="w-full sm:w-40" value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value)} />
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-full sm:w-36">
               <SelectValue placeholder="Estado" />
@@ -270,139 +210,131 @@ export default function PayrollsPage() {
           </Select>
         </div>
 
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Nueva Nomina
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Crear Nomina</DialogTitle>
-              <DialogDescription>
-                Introduce los datos de la nomina para el trabajador seleccionado.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreatePayroll}>
-              <FieldGroup className="py-4">
-                <Field>
-                  <FieldLabel htmlFor="workerId">Trabajador</FieldLabel>
-                  <Select value={formData.workerId} onValueChange={(v) => {
-                    const worker = workers.find(w => w.id === v);
-                    setFormData({ ...formData, workerId: v, grossSalary: String(worker?.baseSalary || '') });
-                  }}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar trabajador" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {workers.map((worker) => (
-                        <SelectItem key={worker.id} value={String(worker.id)}>
-                          {worker.firstName} {worker.lastName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="period">Periodo</FieldLabel>
-                  <Input
-                    id="period"
-                    type="month"
-                    value={formData.period}
-                    onChange={(e) => setFormData({ ...formData, period: e.target.value })}
-                    required
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="grossSalary">Salario Bruto (EUR)</FieldLabel>
-                  <Input
-                    id="grossSalary"
-                    type="number"
-                    value={formData.grossSalary}
-                    onChange={(e) => setFormData({ ...formData, grossSalary: e.target.value })}
-                    required
-                  />
-                </Field>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Dialog open={isAdjustmentOpen} onOpenChange={setIsAdjustmentOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <SlidersHorizontal className="mr-2 h-4 w-4" />
+                Ajuste manual
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Crear ajuste</DialogTitle>
+                <DialogDescription>Bonifica o penaliza un periodo antes de generar la nómina.</DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleCreateAdjustment}>
+                <FieldGroup className="py-4">
                   <Field>
-                    <FieldLabel htmlFor="overtimeAmount">Horas Extra (EUR)</FieldLabel>
-                    <Input
-                      id="overtimeAmount"
-                      type="number"
-                      value={formData.overtimeAmount}
-                      onChange={(e) => setFormData({ ...formData, overtimeAmount: e.target.value })}
-                    />
+                    <FieldLabel>Trabajador</FieldLabel>
+                    <Select value={adjustmentForm.workerId} onValueChange={(value) => setAdjustmentForm((current) => ({ ...current, workerId: value }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar trabajador" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {workers.map((worker) => (
+                          <SelectItem key={worker.id} value={String(worker.id)}>
+                            {worker.firstName} {worker.lastName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </Field>
                   <Field>
-                    <FieldLabel htmlFor="bonusAmount">Bonus (EUR)</FieldLabel>
-                    <Input
-                      id="bonusAmount"
-                      type="number"
-                      value={formData.bonusAmount}
-                      onChange={(e) => setFormData({ ...formData, bonusAmount: e.target.value })}
-                    />
+                    <FieldLabel>Periodo</FieldLabel>
+                    <Input type="month" value={adjustmentForm.period} onChange={(e) => setAdjustmentForm((current) => ({ ...current, period: e.target.value }))} required />
                   </Field>
-                </div>
-                <Field>
-                  <FieldLabel htmlFor="otherDeductions">Otras Deducciones (EUR)</FieldLabel>
-                  <Input
-                    id="otherDeductions"
-                    type="number"
-                    value={formData.otherDeductions}
-                    onChange={(e) => setFormData({ ...formData, otherDeductions: e.target.value })}
-                  />
-                </Field>
-                {formData.grossSalary && (
-                  <div className="rounded-lg bg-muted p-4 space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>Salario Bruto Total:</span>
-                      <span className="font-medium">
-                        {formatCurrency(Number(formData.grossSalary) + Number(formData.overtimeAmount) + Number(formData.bonusAmount))}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>- Seguridad Social (6.35%):</span>
-                      <span>
-                        {formatCurrency((Number(formData.grossSalary) + Number(formData.overtimeAmount) + Number(formData.bonusAmount)) * 0.0635)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>- IRPF (15%):</span>
-                      <span>
-                        {formatCurrency((Number(formData.grossSalary) + Number(formData.overtimeAmount) + Number(formData.bonusAmount)) * 0.15)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between font-medium pt-2 border-t">
-                      <span>Salario Neto:</span>
-                      <span className="text-emerald-600">{formatCurrency(calculateNetSalary())}</span>
-                    </div>
-                  </div>
-                )}
-              </FieldGroup>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? 'Creando...' : 'Crear Nomina'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                  <Field>
+                    <FieldLabel>Tipo</FieldLabel>
+                    <Select value={adjustmentForm.type} onValueChange={(value: 'BONUS' | 'PENALTY') => setAdjustmentForm((current) => ({ ...current, type: value }))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="BONUS">Bonificación</SelectItem>
+                        <SelectItem value="PENALTY">Penalización</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field>
+                    <FieldLabel>Descripción</FieldLabel>
+                    <Input value={adjustmentForm.description} onChange={(e) => setAdjustmentForm((current) => ({ ...current, description: e.target.value }))} required />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Importe</FieldLabel>
+                    <Input type="number" step="0.01" value={adjustmentForm.amount} onChange={(e) => setAdjustmentForm((current) => ({ ...current, amount: e.target.value }))} required />
+                  </Field>
+                </FieldGroup>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsAdjustmentOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? 'Guardando...' : 'Guardar ajuste'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isGenerateOpen} onOpenChange={setIsGenerateOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Generar nómina
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Generación avanzada</DialogTitle>
+                <DialogDescription>Usa turnos, ausencias y ajustes manuales del periodo seleccionado.</DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleGeneratePayroll}>
+                <FieldGroup className="py-4">
+                  <Field>
+                    <FieldLabel>Trabajador</FieldLabel>
+                    <Select value={generateForm.workerId} onValueChange={(value) => setGenerateForm((current) => ({ ...current, workerId: value }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar trabajador" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {workers.map((worker) => (
+                          <SelectItem key={worker.id} value={String(worker.id)}>
+                            {worker.firstName} {worker.lastName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field>
+                    <FieldLabel>Periodo</FieldLabel>
+                    <Input type="month" value={generateForm.period} onChange={(e) => setGenerateForm((current) => ({ ...current, period: e.target.value }))} required />
+                  </Field>
+                </FieldGroup>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsGenerateOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? 'Generando...' : 'Generar'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Listado de Nominas ({filteredPayrolls.length})
+            Nóminas del hospital ({filteredPayrolls.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <Table className="min-w-[720px]">
+            <Table className="min-w-[860px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Trabajador</TableHead>
@@ -417,55 +349,23 @@ export default function PayrollsPage() {
               <TableBody>
                 {filteredPayrolls.map((payroll) => (
                   <TableRow key={payroll.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-medium">
-                          {getInitialsFromName(payroll.workerFullName)}
-                        </div>
-                        <span className="font-medium">{payroll.workerFullName}</span>
-                      </div>
-                    </TableCell>
+                    <TableCell className="font-medium">{payroll.workerFullName}</TableCell>
                     <TableCell>{formatMonthYear(`${payroll.period}-01`)}</TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(payroll.grossSalary + payroll.overtimeAmount + payroll.bonusAmount)}
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      -{formatCurrency(payroll.socialSecurityWorker + payroll.incomeTaxWithholding + payroll.otherDeductions)}
-                    </TableCell>
-                    <TableCell className="text-right font-medium text-emerald-600">
-                      {formatCurrency(payroll.netSalary)}
-                    </TableCell>
+                    <TableCell className="text-right">{formatCurrency(payroll.grossSalary)}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">-{formatCurrency(payroll.socialSecurityWorker + payroll.incomeTaxWithholding + payroll.otherDeductions)}</TableCell>
+                    <TableCell className="text-right font-medium text-emerald-600">{formatCurrency(payroll.netSalary)}</TableCell>
                     <TableCell>{getStatusBadge(payroll.status)}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => openPayrollDetail(payroll)}
-                          aria-label="Ver detalles de la nomina"
-                        >
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void openPayrollDetail(payroll)}>
                           <Eye className="h-4 w-4" />
                         </Button>
-                        {payroll.status === 'DRAFT' && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-blue-600"
-                            onClick={() => handlePublishPayroll(payroll.id)}
-                            aria-label="Publicar nomina"
-                          >
+                        {payroll.status === 'DRAFT' ? (
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => void handlePublishPayroll(payroll.id)} disabled={isPublishing === payroll.id}>
                             <Send className="h-4 w-4" />
                           </Button>
-                        )}
-                        {payroll.status !== 'DRAFT' && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => handleDownload(payroll)}
-                            aria-label="Descargar nomina"
-                          >
+                        ) : (
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void handleDownload(payroll)}>
                             <Download className="h-4 w-4" />
                           </Button>
                         )}
@@ -476,103 +376,70 @@ export default function PayrollsPage() {
               </TableBody>
             </Table>
           </div>
-
-          {filteredPayrolls.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
-              <h3 className="text-lg font-medium">No se encontraron nominas</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Intenta cambiar los filtros o crear una nueva nomina
-              </p>
-            </div>
-          )}
         </CardContent>
       </Card>
 
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              Detalle de Nomina - {selectedPayroll ? formatMonthYear(`${selectedPayroll.period}-01`) : ''}
+              Detalle de nómina {selectedPayroll ? `- ${selectedPayroll.workerFullName} (${formatMonthYear(`${selectedPayroll.period}-01`)})` : ''}
             </DialogTitle>
           </DialogHeader>
           {selectedPayroll && (
             <div className="space-y-4">
-              <div className="rounded-lg border p-4 space-y-3">
-                <h4 className="font-medium">Devengos</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>Salario Base</span>
-                    <span>{formatCurrency(selectedPayroll.grossSalary)}</span>
-                  </div>
-                  {selectedPayroll.overtimeAmount > 0 && (
-                    <div className="flex justify-between">
-                      <span>Horas Extra</span>
-                      <span>{formatCurrency(selectedPayroll.overtimeAmount)}</span>
-                    </div>
-                  )}
-                  {selectedPayroll.bonusAmount > 0 && (
-                    <div className="flex justify-between">
-                      <span>Bonus</span>
-                      <span>{formatCurrency(selectedPayroll.bonusAmount)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-medium pt-2 border-t">
-                    <span>Total Bruto</span>
-                    <span>
-                      {formatCurrency(
-                        selectedPayroll.grossSalary
-                          + selectedPayroll.overtimeAmount
-                          + selectedPayroll.bonusAmount,
-                      )}
-                    </span>
-                  </div>
-                </div>
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Bruto</CardTitle></CardHeader>
+                  <CardContent className="text-xl font-semibold">{formatCurrency(selectedPayroll.grossSalary)}</CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Deducciones</CardTitle></CardHeader>
+                  <CardContent className="text-xl font-semibold text-destructive">
+                    {formatCurrency(selectedPayroll.socialSecurityWorker + selectedPayroll.incomeTaxWithholding + selectedPayroll.otherDeductions)}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Neto</CardTitle></CardHeader>
+                  <CardContent className="text-xl font-semibold text-emerald-600">{formatCurrency(selectedPayroll.netSalary)}</CardContent>
+                </Card>
               </div>
 
-              <div className="rounded-lg border p-4 space-y-3">
-                <h4 className="font-medium">Deducciones</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Seguridad Social (6.35%)</span>
-                    <span>-{formatCurrency(selectedPayroll.socialSecurityWorker)}</span>
-                  </div>
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>IRPF (15%)</span>
-                    <span>-{formatCurrency(selectedPayroll.incomeTaxWithholding)}</span>
-                  </div>
-                  {selectedPayroll.otherDeductions > 0 && (
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Otras Deducciones</span>
-                      <span>-{formatCurrency(selectedPayroll.otherDeductions)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-medium pt-2 border-t text-destructive">
-                    <span>Total Deducciones</span>
-                    <span>
-                      -{formatCurrency(
-                        selectedPayroll.socialSecurityWorker
-                          + selectedPayroll.incomeTaxWithholding
-                          + selectedPayroll.otherDeductions,
-                      )}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 p-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-medium">Salario Neto</span>
-                  <span className="text-2xl font-bold text-emerald-600">
-                    {formatCurrency(selectedPayroll.netSalary)}
-                  </span>
-                </div>
-              </div>
-
-              <Button className="w-full" onClick={() => handleDownload(selectedPayroll)}>
-                <Download className="mr-2 h-4 w-4" />
-                Descargar PDF
-              </Button>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Líneas de cálculo</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Concepto</TableHead>
+                        <TableHead className="text-right">Cantidad</TableHead>
+                        <TableHead className="text-right">Unitario</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedItems.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center text-muted-foreground">
+                            No hay conceptos detallados disponibles.
+                          </TableCell>
+                        </TableRow>
+                      ) : selectedItems.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-medium">{item.description}</TableCell>
+                          <TableCell className="text-right">{item.quantity}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(item.unitAmount)}</TableCell>
+                          <TableCell className={`text-right font-medium ${item.totalAmount >= 0 ? 'text-foreground' : 'text-destructive'}`}>
+                            {formatCurrency(item.totalAmount)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
             </div>
           )}
         </DialogContent>

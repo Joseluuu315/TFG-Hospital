@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { DashboardLoading } from '@/components/dashboard/dashboard-loading';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -68,6 +69,7 @@ const mockHospitals: Hospital[] = [
 ];
 
 export default function HospitalsPage() {
+  const router = useRouter();
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -130,6 +132,10 @@ export default function HospitalsPage() {
   const openDetailsDialog = (hospital: Hospital) => {
     setSelectedHospital(hospital);
     setIsDetailDialogOpen(true);
+  };
+
+  const openManagementPage = (hospital: Hospital) => {
+    router.push(`/dashboard/root/hospitals/${hospital.id}`);
   };
 
   const closeFormDialog = () => {
@@ -410,6 +416,10 @@ export default function HospitalsPage() {
                       <Eye className="mr-2 h-4 w-4" />
                       Ver detalles
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => openManagementPage(hospital)}>
+                      <Building2 className="mr-2 h-4 w-4" />
+                      Gestionar hospital
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => openEditDialog(hospital)}>
                       <Edit className="mr-2 h-4 w-4" />
                       Editar
@@ -446,6 +456,9 @@ export default function HospitalsPage() {
                     {formatDate(hospital.createdAt)}
                   </span>
                 </div>
+                <Button variant="outline" size="sm" className="mt-2 w-full" onClick={() => openManagementPage(hospital)}>
+                  Gestionar administradores y trabajadores
+                </Button>
               </div>
             </CardContent>
           </Card>

@@ -94,6 +94,17 @@ public class UserService {
         LocalDateTime now = LocalDateTime.now();
         HospitalDocument hospital = hospitalRepository.findById(request.getHospitalId())
                 .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
+        UserRole role = request.getRole() != null ? request.getRole() : UserRole.WORKER;
+        String department = request.getDepartment();
+        String jobTitle = request.getJobTitle();
+        if (role == UserRole.HOSPITAL_ADMIN) {
+            if (department == null || department.isBlank()) {
+                department = "Administracion";
+            }
+            if (jobTitle == null || jobTitle.isBlank()) {
+                jobTitle = "Administrador del hospital";
+            }
+        }
 
         UserDocument document = UserDocument.builder()
                 .id(UUID.randomUUID().toString())
@@ -103,13 +114,13 @@ public class UserService {
                 .email(request.getEmail())
                 .phone(request.getPhone())
                 .dni(request.getDni())
-                .role(UserRole.WORKER)
+                .role(role)
                 .enabled(true)
                 .accountNonLocked(true)
                 .hospitalId(hospital.getId())
                 .hospitalName(hospital.getName())
-                .department(request.getDepartment())
-                .jobTitle(request.getJobTitle())
+                .department(department)
+                .jobTitle(jobTitle)
                 .baseSalary(request.getBaseSalary())
                 .hireDate(now.toLocalDate().toString())
                 .calendarEvents(new ArrayList<>())
@@ -146,6 +157,9 @@ public class UserService {
         }
         if (request.getImageURL() != null) {
             user.setImageURL(request.getImageURL());
+        }
+        if (request.getRole() != null) {
+            user.setRole(request.getRole());
         }
         if (request.getDepartment() != null) {
             user.setDepartment(request.getDepartment());

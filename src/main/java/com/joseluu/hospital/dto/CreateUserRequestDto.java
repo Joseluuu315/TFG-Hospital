@@ -1,5 +1,6 @@
 package com.joseluu.hospital.dto;
 
+import com.joseluu.hospital.entity.enums.UserRole;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -19,6 +20,7 @@ public class CreateUserRequestDto {
     private String dni;
     @NotBlank(message = "El hospital es obligatorio")
     private String hospitalId;
+    private UserRole role;
     private String department;
     private String jobTitle;
     @PositiveOrZero(message = "El salario base debe ser mayor o igual a 0")
