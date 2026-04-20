@@ -254,6 +254,18 @@ export default function AdminOperationsPage() {
     }
   };
 
+  const handleDeleteShiftType = async (code: string) => {
+    if (!hospitalId) return;
+    try {
+      await shiftTypesApi.delete(hospitalId, code);
+      setShiftTypes((prev) => prev.filter((st) => st.code !== code));
+      toast.success('Tipo de turno eliminado');
+    } catch (error) {
+      console.error(error);
+      toast.error('No se pudo eliminar el tipo de turno');
+    }
+  };
+
   const shiftTypeCodes = shiftTypes.map((st) => st.code);
 
   return (
@@ -402,12 +414,13 @@ export default function AdminOperationsPage() {
                     <TableHead>Nombre</TableHead>
                     <TableHead>Horario</TableHead>
                     <TableHead>Noche</TableHead>
+                    <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {shiftTypes.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center text-muted-foreground">
                         No hay tipos de turno creados aún.
                       </TableCell>
                     </TableRow>
@@ -421,6 +434,17 @@ export default function AdminOperationsPage() {
                           <Badge variant={st.crossesMidnight ? 'default' : 'secondary'}>
                             {st.crossesMidnight ? 'Sí' : 'No'}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => handleDeleteShiftType(st.code)}
+                            aria-label="Eliminar tipo de turno"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))

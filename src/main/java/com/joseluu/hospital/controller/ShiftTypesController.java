@@ -24,4 +24,9 @@ public class ShiftTypesController {
     public ShiftTypeDto create(@PathVariable String hospitalId, @RequestBody ShiftTypeDto request) {
         return shiftTypeService.create(hospitalId, request);
     }
+
+    @DeleteMapping("/{code}")
+    public void delete(@PathVariable String hospitalId, @PathVariable String code) {
+        shiftTypeService.delete(hospitalId, code);
+    }
 }

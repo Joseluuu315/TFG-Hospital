@@ -102,6 +102,28 @@ public class UserService {
         }
     }
 
+    /** Edita un evento del calendario de un trabajador. */
+    public CalendarEventDto updateCalendarEvent(String userId, String eventId, CalendarEventDto dto) {
+        UserDocument user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+                
+        if (user.getCalendarEvents() != null) {
+            for (CalendarEventDocument e : user.getCalendarEvents()) {
+                if (eventId.equals(e.getId())) {
+                    e.setDate(dto.getDate());
+                    e.setType(dto.getType());
+                    e.setStartTime(dto.getStartTime());
+                    e.setEndTime(dto.getEndTime());
+                    e.setNotes(dto.getNotes());
+                    user.setUpdatedAt(LocalDateTime.now().toString());
+                    userRepository.save(user);
+                    return toCalendarEvent(e);
+                }
+            }
+        }
+        throw new NotFoundException("Evento de calendario no encontrado");
+    }
+
     public List<CalendarEventDto> getCalendarEvents(String userId, String month) {
         UserDocument user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));

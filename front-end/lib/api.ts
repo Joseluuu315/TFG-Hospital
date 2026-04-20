@@ -361,6 +361,8 @@ export const shiftTypesApi = {
   getByHospital: (hospitalId: string) => api.get<ShiftType[]>(`/hospitals/${hospitalId}/shift-types`),
   create: (hospitalId: string, data: ShiftType) =>
     api.post<ShiftType>(`/hospitals/${hospitalId}/shift-types`, data),
+  delete: (hospitalId: string, code: string) =>
+    api.delete(`/hospitals/${hospitalId}/shift-types/${code}`),
 };
 
 export const schedulingApi = {

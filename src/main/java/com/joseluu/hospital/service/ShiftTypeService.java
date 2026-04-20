@@ -36,6 +36,11 @@ public class ShiftTypeService {
         return toDto(saved);
     }
 
+    public void delete(String hospitalId, String code) {
+        shiftTypeRepository.findByHospitalIdAndCode(hospitalId, code)
+                .ifPresent(shiftTypeRepository::delete);
+    }
+
     public void seedDefaults(String hospitalId) {
         if (!shiftTypeRepository.findByHospitalId(hospitalId).isEmpty()) {
             return;

@@ -123,4 +123,13 @@ public class UsersController {
         userService.removeCalendarEvent(id, eventId);
         return ResponseEntity.noContent().build();
     }
+
+    /** Edita un evento de calendario de un trabajador (uso admin). */
+    @PutMapping("/{id}/calendar-events/{eventId}")
+    public CalendarEventDto updateCalendarEvent(
+            @PathVariable String id,
+            @PathVariable String eventId,
+            @Valid @RequestBody CalendarEventDto dto) {
+        return userService.updateCalendarEvent(id, eventId, dto);
+    }
 }

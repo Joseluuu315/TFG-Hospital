@@ -95,14 +95,17 @@ public class SchedulingService {
                 .findInDateRange(hospitalId, startDate, endDate);
 
         if (requirements.isEmpty()) {
-            throw new IllegalStateException(
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
                     "No hay demandas de turno registradas entre " + startDate + " y " + endDate
                     + ". Crea al menos una demanda antes de lanzar la autoasignación.");
         }
 
         List<UserDocument> workers = userRepository.findByHospitalIdAndRole(hospitalId, UserRole.WORKER);
         if (workers.isEmpty()) {
-            throw new IllegalStateException("No hay trabajadores activos en el hospital.");
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "No hay trabajadores activos en el hospital.");
         }
 
         // Versión = max versión existente + 1 (filtrado por hospital)
@@ -123,18 +126,54 @@ public class SchedulingService {
                     .orElseThrow(() -> new NotFoundException(
                             "Tipo de turno no encontrado: " + requirement.getShiftTypeCode()));
 
-            List<UserDocument> candidates = workers.stream()
-                    .filter(w -> requirement.getDepartment().equalsIgnoreCase(w.getDepartment()))
-                    .filter(w -> w.isEnabled())
-                    .filter(w -> !isOnApprovedLeave(w.getId(), requirement.getDate()))
+            // Base: Cualquier trabajador sin overlap en ese momento
+            List<UserDocument> baseCandidates = workers.stream()
                     .filter(w -> !hasOverlap(w.getId(), requirement.getDate(), shiftType))
-                    .filter(w -> respectsRest(w.getId(), requirement.getDate(), shiftType,
-                            settings.getMinRestHours()))
-                    .filter(w -> respectsWeeklyHours(w.getId(), requirement.getDate(), shiftType,
-                            settings.getMaxWeeklyHours()))
-                    .sorted(Comparator.comparingDouble(
-                            w -> calculateScore(w.getId(), requirement.getDate(), shiftType)))
                     .collect(Collectors.toList());
+
+            // Filtros ideales
+            java.util.function.Predicate<UserDocument> isIdeal = w ->
+                    w.isEnabled() &&
+                    w.getDepartment() != null && requirement.getDepartment().equalsIgnoreCase(w.getDepartment()) &&
+                    !isOnApprovedLeave(w.getId(), requirement.getDate());
+
+            // Pass 1: Estricto (Respeta TODO: ideal + descanso + horas semanales)
+            List<UserDocument> candidates = baseCandidates.stream()
+                    .filter(isIdeal)
+                    .filter(w -> respectsRest(w.getId(), requirement.getDate(), shiftType, settings.getMinRestHours()))
+                    .filter(w -> respectsWeeklyHours(w.getId(), requirement.getDate(), shiftType, settings.getMaxWeeklyHours()))
+                    .sorted(Comparator.comparingDouble(w -> calculateScore(w.getId(), requirement.getDate(), shiftType)))
+                    .collect(Collectors.toList());
+
+            // Pass 2: Relajado (Ignora horas máximas semanales si hace falta)
+            if (candidates.size() < requirement.getRequiredWorkers()) {
+                List<UserDocument> extra = baseCandidates.stream()
+                        .filter(w -> !candidates.contains(w))
+                        .filter(isIdeal)
+                        .filter(w -> respectsRest(w.getId(), requirement.getDate(), shiftType, settings.getMinRestHours()))
+                        .sorted(Comparator.comparingDouble(w -> calculateScore(w.getId(), requirement.getDate(), shiftType)))
+                        .collect(Collectors.toList());
+                candidates.addAll(extra);
+            }
+
+            // Pass 3: Menos estricto (Ignora descansos mínimos y horas)
+            if (candidates.size() < requirement.getRequiredWorkers()) {
+                 List<UserDocument> extra = baseCandidates.stream()
+                        .filter(w -> !candidates.contains(w))
+                        .filter(isIdeal)
+                        .sorted(Comparator.comparingDouble(w -> calculateScore(w.getId(), requirement.getDate(), shiftType)))
+                        .collect(Collectors.toList());
+                candidates.addAll(extra);
+            }
+
+            // Pass 4: Totalmente automático a la fuerza (Cualquier trabajador libre, sea del departamento o no)
+            if (candidates.size() < requirement.getRequiredWorkers()) {
+                 List<UserDocument> extra = baseCandidates.stream()
+                        .filter(w -> !candidates.contains(w))
+                        .sorted(Comparator.comparingDouble(w -> calculateScore(w.getId(), requirement.getDate(), shiftType)))
+                        .collect(Collectors.toList());
+                candidates.addAll(extra);
+            }
 
             int covered = 0;
             for (UserDocument candidate : candidates) {
@@ -165,6 +204,13 @@ public class SchedulingService {
 
         auditLogService.log(hospitalId, actorUserId, "SHIFT_AUTO_ASSIGNED", "shift_assignments",
                 hospitalId, "Asignacion automatica entre " + startDate + " y " + endDate);
+
+        if (assignments.isEmpty()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Asignados 0 turnos. Ningún trabajador cumple los requisitos para las demandas registradas (revisa que haya trabajadores libres y habilitados del mismo departamento que la demanda).");
+        }
+
         return assignments;
     }
 
