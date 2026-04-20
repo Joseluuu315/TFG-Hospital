@@ -27,7 +27,10 @@ public class HospitalSettingsService {
 
     public HospitalSettingsDto getByHospital(String hospitalId) {
         return toDto(hospitalSettingsRepository.findById(hospitalId)
-                .orElseThrow(() -> new NotFoundException("Configuracion no encontrada")));
+                .orElseGet(() -> {
+                    seedDefaults(hospitalId);
+                    return hospitalSettingsRepository.findById(hospitalId).get();
+                }));
     }
 
     public HospitalSettingsDto upsert(String hospitalId, HospitalSettingsDto request) {

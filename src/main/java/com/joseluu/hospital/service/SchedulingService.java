@@ -92,7 +92,7 @@ public class SchedulingService {
         HospitalSettingsDto settings = hospitalSettingsService.getByHospital(hospitalId);
 
         List<ShiftRequirementDocument> requirements = shiftRequirementRepository
-                .findByHospitalIdAndDateBetween(hospitalId, startDate, endDate);
+                .findInDateRange(hospitalId, startDate, endDate);
 
         if (requirements.isEmpty()) {
             throw new IllegalStateException(
@@ -244,8 +244,33 @@ public class SchedulingService {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Consultas
+    // Demandas y Consultas
     // ──────────────────────────────────────────────────────────────────────────
+
+    public List<ShiftRequirementDto> getRequirementsForHospital(String hospitalId, String startDate, String endDate) {
+        List<ShiftRequirementDocument> requirements = (startDate != null && endDate != null)
+                ? shiftRequirementRepository.findInDateRange(hospitalId, startDate, endDate)
+                : shiftRequirementRepository.findByHospitalId(hospitalId);
+
+        return requirements.stream().map(req -> ShiftRequirementDto.builder()
+                .id(req.getId())
+                .date(req.getDate())
+                .department(req.getDepartment())
+                .shiftTypeCode(req.getShiftTypeCode())
+                .requiredWorkers(req.getRequiredWorkers())
+                .build()).collect(Collectors.toList());
+    }
+
+    public void deleteRequirement(String hospitalId, String actorUserId, String requirementId) {
+        ShiftRequirementDocument req = shiftRequirementRepository.findById(requirementId)
+                .orElseThrow(() -> new NotFoundException("Demanda no encontrada"));
+        if (!req.getHospitalId().equals(hospitalId)) {
+            throw new IllegalArgumentException("La demanda no pertenece a este hospital.");
+        }
+        shiftRequirementRepository.delete(req);
+        auditLogService.log(hospitalId, actorUserId, "REQUIREMENT_DELETED",
+                "shift_requirements", requirementId, "Demanda eliminada");
+    }
 
     public List<ShiftAssignmentDto> getAssignmentsForWorker(String workerId) {
         return shiftAssignmentRepository.findByWorkerId(workerId).stream()

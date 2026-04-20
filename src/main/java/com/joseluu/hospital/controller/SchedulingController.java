@@ -31,6 +31,26 @@ public class SchedulingController {
         return schedulingService.createRequirement(hospitalId, request);
     }
 
+    /** Obtiene la lista de demandas de turno de un hospital en un rango. */
+    @GetMapping("/api/hospitals/{hospitalId}/shift-requirements")
+    public List<ShiftRequirementDto> getRequirements(
+            @PathVariable String hospitalId,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        return schedulingService.getRequirementsForHospital(hospitalId, startDate, endDate);
+    }
+
+    /** Borra una demanda de turno. */
+    @DeleteMapping("/api/hospitals/{hospitalId}/shift-requirements/{requirementId}")
+    public ResponseEntity<Void> deleteRequirement(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String hospitalId,
+            @PathVariable String requirementId) {
+        UserDto actor = authService.getUserFromBearer(authorization);
+        schedulingService.deleteRequirement(hospitalId, actor.getId(), requirementId);
+        return ResponseEntity.noContent().build();
+    }
+
     /** Lanza la autoasignación para un rango de fechas. */
     @PostMapping("/api/hospitals/{hospitalId}/shifts/auto-assign")
     public List<ShiftAssignmentDto> autoAssign(

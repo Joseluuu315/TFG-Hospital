@@ -91,6 +91,7 @@ export default function AdminOperationsPage() {
     endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
   });
   const [existingAssignments, setExistingAssignments] = useState<ShiftAssignment[]>([]);
+  const [existingRequirements, setExistingRequirements] = useState<ShiftRequirement[]>([]);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isCreatingShiftType, setIsCreatingShiftType] = useState(false);
   const [isCreatingRequirement, setIsCreatingRequirement] = useState(false);
@@ -127,16 +128,16 @@ export default function AdminOperationsPage() {
     load();
   }, [hospitalId]);
 
-  const loadAssignmentsForRange = useCallback(async () => {
+  const loadDataForRange = useCallback(async () => {
     if (!hospitalId) return;
     setIsLoadingAssignments(true);
     try {
-      const res = await schedulingApi.getAssignments(
-        hospitalId,
-        autoAssignRange.startDate,
-        autoAssignRange.endDate,
-      );
-      setExistingAssignments(res.data);
+      const [assignRes, reqRes] = await Promise.all([
+        schedulingApi.getAssignments(hospitalId, autoAssignRange.startDate, autoAssignRange.endDate),
+        schedulingApi.getRequirements(hospitalId, autoAssignRange.startDate, autoAssignRange.endDate),
+      ]);
+      setExistingAssignments(assignRes.data);
+      setExistingRequirements(reqRes.data);
     } catch (error) {
       console.error(error);
     } finally {
@@ -145,8 +146,8 @@ export default function AdminOperationsPage() {
   }, [hospitalId, autoAssignRange.startDate, autoAssignRange.endDate]);
 
   useEffect(() => {
-    void loadAssignmentsForRange();
-  }, [loadAssignmentsForRange]);
+    void loadDataForRange();
+  }, [loadDataForRange]);
 
   if (isLoading) return <DashboardLoading />;
 
@@ -202,6 +203,7 @@ export default function AdminOperationsPage() {
       await schedulingApi.createRequirement(hospitalId, requirementForm);
       toast.success('Demanda de turno registrada');
       setRequirementForm(defaultRequirement);
+      void loadDataForRange();
     } catch (error) {
       console.error(error);
       toast.error('No se pudo registrar la demanda');
@@ -216,8 +218,7 @@ export default function AdminOperationsPage() {
     try {
       const response = await schedulingApi.autoAssign(hospitalId, autoAssignRange);
       toast.success(`Asignados ${response.data.length} turnos correctamente`);
-      // Recargamos el listado completo del rango para mostrar todo
-      await loadAssignmentsForRange();
+      await loadDataForRange();
     } catch (error: unknown) {
       console.error(error);
       const msg =
@@ -238,6 +239,18 @@ export default function AdminOperationsPage() {
     } catch (error) {
       console.error(error);
       toast.error('No se pudo cancelar la asignación');
+    }
+  };
+
+  const handleDeleteRequirement = async (reqId: string) => {
+    if (!hospitalId) return;
+    try {
+      await schedulingApi.deleteRequirement(hospitalId, reqId);
+      setExistingRequirements((prev) => prev.filter((r) => r.id !== reqId));
+      toast.success('Demanda eliminada');
+    } catch (error) {
+      console.error(error);
+      toast.error('No se pudo eliminar la demanda');
     }
   };
 
@@ -521,11 +534,60 @@ export default function AdminOperationsPage() {
             <div className="rounded-lg border">
               <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
                 <p className="text-sm font-medium text-muted-foreground">
-                  Asignaciones en el rango ({existingAssignments.length})
+                  Demandas registradas ({existingRequirements.length})
                 </p>
-                <Button variant="ghost" size="sm" onClick={loadAssignmentsForRange} disabled={isLoadingAssignments}>
+                <Button variant="ghost" size="sm" onClick={loadDataForRange} disabled={isLoadingAssignments}>
                   {isLoadingAssignments ? 'Cargando...' : 'Actualizar'}
                 </Button>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Departamento</TableHead>
+                    <TableHead>Turno</TableHead>
+                    <TableHead>Requeridos</TableHead>
+                    <TableHead className="w-10"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {existingRequirements.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
+                        No hay demandas en este rango de fechas.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    existingRequirements.map((req) => (
+                      <TableRow key={req.id}>
+                        <TableCell className="font-medium">{formatDate(req.date)}</TableCell>
+                        <TableCell>{req.department}</TableCell>
+                        <TableCell>{req.shiftTypeCode}</TableCell>
+                        <TableCell>{req.requiredWorkers}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => req.id && handleDeleteRequirement(req.id)}
+                            aria-label="Eliminar demanda"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Tabla de asignaciones del rango */}
+            <div className="rounded-lg border">
+              <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
+                <p className="text-sm font-medium text-muted-foreground">
+                  Asignaciones en el rango ({existingAssignments.length})
+                </p>
               </div>
               <Table>
                 <TableHeader>

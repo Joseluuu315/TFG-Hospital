@@ -7,5 +7,6 @@ import java.util.List;
 
 public interface ShiftRequirementRepository extends MongoRepository<ShiftRequirementDocument, String> {
     List<ShiftRequirementDocument> findByHospitalId(String hospitalId);
-    List<ShiftRequirementDocument> findByHospitalIdAndDateBetween(String hospitalId, String startDate, String endDate);
+    @org.springframework.data.mongodb.repository.Query("{ 'hospitalId': ?0, 'date': { $gte: ?1, $lte: ?2 } }")
+    List<ShiftRequirementDocument> findInDateRange(String hospitalId, String startDate, String endDate);
 }

@@ -366,6 +366,15 @@ export const shiftTypesApi = {
 export const schedulingApi = {
   createRequirement: (hospitalId: string, data: ShiftRequirement) =>
     api.post<ShiftRequirement>(`/hospitals/${hospitalId}/shift-requirements`, data),
+  getRequirements: (hospitalId: string, startDate?: string, endDate?: string) => {
+    const params = new URLSearchParams();
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return api.get<ShiftRequirement[]>(`/hospitals/${hospitalId}/shift-requirements${query}`);
+  },
+  deleteRequirement: (hospitalId: string, requirementId: string) =>
+    api.delete(`/hospitals/${hospitalId}/shift-requirements/${requirementId}`),
   autoAssign: (hospitalId: string, data: { startDate: string; endDate: string }) =>
     api.post<ShiftAssignment[]>(`/hospitals/${hospitalId}/shifts/auto-assign`, data),
   getAssignments: (hospitalId: string, startDate?: string, endDate?: string) => {
