@@ -23,9 +23,23 @@ export default function LoginPage() {
 
     try {
       await login({ email, password });
-    } catch (err) {
-      setError('Credenciales incorrectas. Por favor, inténtalo de nuevo.');
-      console.error('Login error:', err);
+      // Aquí podrías redirigir al usuario si el login es exitoso
+      // window.location.href = '/dashboard';
+    } catch (err: any) {
+      // 1. Intentamos extraer el mensaje que viene del backend (Spring Boot)
+      // En Axios, el error está en err.response.data
+      const backendMessage = err.response?.data?.message;
+
+      // 2. Si hay mensaje del backend lo usamos, si no, ponemos uno genérico
+      if (backendMessage) {
+        setError(backendMessage);
+      } else if (err.message === "Network Error") {
+        setError('No hay conexión con el servidor.');
+      } else {
+        setError('Credenciales incorrectas. Por favor, inténtalo de nuevo.');
+      }
+
+      console.error('Login error details:', err.response?.data || err);
     } finally {
       setIsLoading(false);
     }

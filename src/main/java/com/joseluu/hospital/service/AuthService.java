@@ -6,6 +6,7 @@ import com.joseluu.hospital.dto.RefreshTokenRequestDto;
 import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.entity.UserDocument;
 import com.joseluu.hospital.repository.UserRepository;
+import org.springframework.dao.IncorrectResultSizeDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -36,8 +37,20 @@ public class AuthService {
         if (request == null || request.getEmail() == null || request.getPassword() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email y password son obligatorios");
         }
-        UserDocument userDocument = userRepository.findByEmailIgnoreCase(request.getEmail())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciales invalidas"));
+
+        UserDocument userDocument;
+        try {
+            // Intentamos buscar el usuario
+            userDocument = userRepository.findByEmailIgnoreCase(request.getEmail())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciales invalidas"));
+
+        } catch (IncorrectResultSizeDataAccessException e) {
+            // Si entra aquí, es porque hay más de un usuario con el mismo email
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Error de integridad: Existen múltiples cuentas con este email. Contacte con soporte."
+            );
+        }
 
         if (!userDocument.getPassword().equals(request.getPassword())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciales invalidas");
