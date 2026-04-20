@@ -7,6 +7,8 @@ import com.joseluu.hospital.entity.ChatMessageDocument;
 import com.joseluu.hospital.entity.UserDocument;
 import com.joseluu.hospital.entity.enums.ChatType;
 import com.joseluu.hospital.entity.enums.NotificationType;
+import com.joseluu.hospital.exception.BadRequestException;
+import com.joseluu.hospital.exception.NotFoundException;
 import com.joseluu.hospital.repository.ChatMessageRepository;
 import com.joseluu.hospital.repository.ChatRepository;
 import com.joseluu.hospital.repository.UserRepository;
@@ -65,8 +67,11 @@ public class ChatService {
      * Persiste un nuevo mensaje, actualiza el último mensaje y recalcula los contadores de lectura.
      */
     public ChatMessageDto sendMessage(String chatId, String senderId, String senderName, String content) {
+        if (content == null || content.isBlank()) {
+            throw new BadRequestException("El contenido del mensaje es obligatorio");
+        }
         ChatDocument chat = chatRepository.findById(chatId)
-                .orElseThrow(() -> new IllegalArgumentException("Chat no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Chat no encontrado"));
 
         // Obtener la imagen del remitente
         String senderImageURL = userRepository.findById(senderId)
@@ -106,9 +111,12 @@ public class ChatService {
      * Crea (o reutiliza) un chat privado entre dos usuarios.
      */
     public ChatDto createPrivateChat(String currentUserId, String otherUserId) {
+        if (otherUserId == null || otherUserId.isBlank()) {
+            throw new BadRequestException("El userId es obligatorio");
+        }
         List<UserDocument> users = userRepository.findAllById(List.of(currentUserId, otherUserId));
         if (users.size() < 2) {
-            throw new IllegalArgumentException("No se encontraron ambos usuarios");
+            throw new NotFoundException("No se encontraron ambos usuarios");
         }
 
         Optional<ChatDocument> existing = chatRepository.findAll().stream()
@@ -148,6 +156,12 @@ public class ChatService {
                                    String name,
                                    String description,
                                    List<String> memberIds) {
+        if (name == null || name.isBlank()) {
+            throw new BadRequestException("El nombre del chat es obligatorio");
+        }
+        if (memberIds == null || memberIds.isEmpty()) {
+            throw new BadRequestException("Los participantes son obligatorios");
+        }
         List<String> participantIds = new java.util.ArrayList<>(new LinkedHashSet<>(memberIds));
         if (!participantIds.contains(currentUserId)) {
             participantIds.add(0, currentUserId);
@@ -155,7 +169,7 @@ public class ChatService {
 
         List<UserDocument> users = userRepository.findAllById(participantIds);
         if (users.isEmpty()) {
-            throw new IllegalArgumentException("No se encontraron miembros para el grupo");
+            throw new NotFoundException("No se encontraron miembros para el grupo");
         }
 
         List<String> participantNames = participantIds.stream()
@@ -188,7 +202,7 @@ public class ChatService {
      */
     public void updateGroupParticipants(String chatId, List<String> participantIds) {
         ChatDocument chat = chatRepository.findById(chatId)
-                .orElseThrow(() -> new IllegalArgumentException("Chat no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Chat no encontrado"));
 
         List<UserDocument> users = userRepository.findAllById(participantIds);
         chat.setParticipants(participantIds);

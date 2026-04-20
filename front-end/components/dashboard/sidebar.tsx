@@ -1,55 +1,15 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
+import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import {
-  Building2,
-  LayoutDashboard,
-  Users,
-  Calendar,
-  FileText,
-  Bell,
-  Settings,
-  LogOut,
-  ClipboardList,
-  BarChart3,
-  CalendarDays,
-  MessageCircle,
-  HeadphonesIcon,
-} from 'lucide-react';
-
-interface NavItem {
-  href: string;
-  label: string;
-  icon: React.ElementType;
-  roles: ('ROOT' | 'HOSPITAL_ADMIN' | 'WORKER')[];
-}
-
-const navItems: NavItem[] = [
-  // ROOT items
-  { href: '/dashboard/root',           label: 'Dashboard',     icon: LayoutDashboard, roles: ['ROOT'] },
-  { href: '/dashboard/root/hospitals', label: 'Hospitales',    icon: Building2,       roles: ['ROOT'] },
-  { href: '/dashboard/root/support',   label: 'Soporte',       icon: HeadphonesIcon,  roles: ['ROOT'] },
-  { href: '/dashboard/root/stats',     label: 'Estadisticas',  icon: BarChart3,       roles: ['ROOT'] },
-
-  // HOSPITAL_ADMIN items
-  { href: '/dashboard/admin',                   label: 'Dashboard',      icon: LayoutDashboard, roles: ['HOSPITAL_ADMIN'] },
-  { href: '/dashboard/admin/workers',           label: 'Trabajadores',   icon: Users,           roles: ['HOSPITAL_ADMIN'] },
-  { href: '/dashboard/admin/payrolls',          label: 'Nominas',        icon: FileText,        roles: ['HOSPITAL_ADMIN'] },
-  { href: '/dashboard/admin/leave-requests',    label: 'Solicitudes',    icon: ClipboardList,   roles: ['HOSPITAL_ADMIN'] },
-  { href: '/dashboard/admin/chat',              label: 'Comunicaciones', icon: MessageCircle,   roles: ['HOSPITAL_ADMIN'] },
-  { href: '/dashboard/admin/announcements',     label: 'Anuncios',       icon: Bell,            roles: ['HOSPITAL_ADMIN'] },
-
-  // WORKER items
-  { href: '/dashboard/worker',                  label: 'Dashboard',      icon: LayoutDashboard, roles: ['WORKER'] },
-  { href: '/dashboard/worker/calendar',         label: 'Mi Calendario',  icon: CalendarDays,    roles: ['WORKER'] },
-  { href: '/dashboard/worker/payrolls',         label: 'Mis Nominas',    icon: FileText,        roles: ['WORKER'] },
-  { href: '/dashboard/worker/leave-requests',   label: 'Dias Libres',    icon: Calendar,        roles: ['WORKER'] },
-  { href: '/dashboard/worker/chat',             label: 'Mensajes',       icon: MessageCircle,   roles: ['WORKER'] },
-];
+import { Building2, LogOut, Settings } from 'lucide-react';
+import { getRoleLabel, navItems } from '@/components/dashboard/nav-items';
+import { getDisplayName, getInitials } from '@/lib/formatters';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -57,22 +17,15 @@ export function Sidebar() {
 
   const filteredItems = navItems.filter((item) => hasRole(item.roles));
 
-  const u = user as any;
-  const fullName = `${u?.firstName ?? u?.nombre ?? ''} ${u?.lastName ?? u?.apellidos ?? ''}`.trim();
-  const initial = (u?.firstName?.[0] ?? u?.nombre?.[0] ?? '?').toUpperCase();
-  const avatarUrl = u?.imageURL ?? u?.avatar ?? null;
-
-  const getRoleLabel = () => {
-    switch (user?.role) {
-      case 'ROOT':           return 'Super Admin';
-      case 'HOSPITAL_ADMIN': return 'Admin Hospital';
-      case 'WORKER':         return 'Trabajador';
-      default:               return 'Usuario';
-    }
-  };
+  const fullName = getDisplayName(user);
+  const initial = getInitials(user);
+  const avatarUrl = (user as { imageURL?: string; avatar?: string } | null)?.imageURL
+    ?? (user as { imageURL?: string; avatar?: string } | null)?.avatar
+    ?? null;
+  const [avatarError, setAvatarError] = useState(false);
 
   return (
-      <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r bg-sidebar text-sidebar-foreground">
+      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 border-r bg-sidebar text-sidebar-foreground md:flex">
         <div className="flex h-full flex-col">
 
           {/* Header */}
@@ -115,15 +68,15 @@ export function Sidebar() {
 
               {/* Avatar */}
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground text-sm font-medium overflow-hidden">
-                {avatarUrl ? (
-                    <img
+                {avatarUrl && !avatarError ? (
+                    <Image
                         src={avatarUrl}
                         alt="Avatar"
+                        width={36}
+                        height={36}
                         className="h-9 w-9 rounded-full object-cover"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).style.display = 'none';
-                          (e.currentTarget.parentElement as HTMLElement).innerText = initial;
-                        }}
+                        onError={() => setAvatarError(true)}
+                        unoptimized
                     />
                 ) : (
                     <span>{initial}</span>
@@ -131,8 +84,8 @@ export function Sidebar() {
               </div>
 
               <div className="flex-1 min-w-0">
-                <p className="truncate text-sm font-medium">{fullName}</p>
-                <p className="truncate text-xs text-sidebar-foreground/70">{getRoleLabel()}</p>
+                <p className="truncate text-sm font-medium">{fullName || 'Usuario'}</p>
+                <p className="truncate text-xs text-sidebar-foreground/70">{getRoleLabel(user?.role)}</p>
               </div>
             </div>
 

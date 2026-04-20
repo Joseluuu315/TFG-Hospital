@@ -8,6 +8,8 @@ class TfgHospitalApplicationTests {
 
     @Test
     void contextLoads() {
+        System.out.println("Hola Mundo");
     }
+
 
 }

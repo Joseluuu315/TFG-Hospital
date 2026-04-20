@@ -5,6 +5,9 @@ import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.dto.WorkGroupDto;
 import com.joseluu.hospital.entity.UserDocument;
 import com.joseluu.hospital.entity.WorkGroupDocument;
+import com.joseluu.hospital.exception.BadRequestException;
+import com.joseluu.hospital.exception.ForbiddenException;
+import com.joseluu.hospital.exception.NotFoundException;
 import com.joseluu.hospital.repository.UserRepository;
 import com.joseluu.hospital.repository.WorkGroupRepository;
 import org.springframework.stereotype.Service;
@@ -50,7 +53,7 @@ public class WorkGroupService {
      */
     public WorkGroupDto getById(String id, UserDto user) {
         WorkGroupDocument group = workGroupRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Grupo no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Grupo no encontrado"));
         validateHospitalScope(group, user);
         return toDto(group);
     }
@@ -59,7 +62,14 @@ public class WorkGroupService {
      * Crea un grupo de trabajo y su chat.
      */
     public WorkGroupDto create(CreateWorkGroupRequestDto request, UserDto user) {
-        String hospitalId = String.valueOf(user.getHospitalId());
+        if (user.getHospitalId() == null || user.getHospitalId().isBlank()) {
+            throw new BadRequestException("El usuario no tiene hospital asociado");
+        }
+        if (request == null || request.getName() == null || request.getName().isBlank()) {
+            throw new BadRequestException("El nombre del grupo es obligatorio");
+        }
+
+        String hospitalId = user.getHospitalId();
 
         List<String> members = new ArrayList<>(new LinkedHashSet<>(request.getMembers() == null ? List.of() : request.getMembers()));
         if (!members.contains(user.getId())) {
@@ -96,8 +106,11 @@ public class WorkGroupService {
      */
     public WorkGroupDto update(String id, CreateWorkGroupRequestDto request, UserDto user) {
         WorkGroupDocument group = workGroupRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Grupo no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Grupo no encontrado"));
         validateHospitalScope(group, user);
+        if (request == null || request.getName() == null || request.getName().isBlank()) {
+            throw new BadRequestException("El nombre del grupo es obligatorio");
+        }
 
         List<String> members = new ArrayList<>(new LinkedHashSet<>(request.getMembers() == null ? List.of() : request.getMembers()));
         if (!members.contains(user.getId())) {
@@ -123,7 +136,7 @@ public class WorkGroupService {
      */
     public void delete(String id, UserDto user) {
         WorkGroupDocument group = workGroupRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Grupo no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Grupo no encontrado"));
         validateHospitalScope(group, user);
         chatService.deleteChat(group.getChatId());
         workGroupRepository.deleteById(id);
@@ -134,9 +147,12 @@ public class WorkGroupService {
      */
     public WorkGroupDto addMember(String id, String userId, UserDto currentUser) {
         WorkGroupDocument group = workGroupRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Grupo no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Grupo no encontrado"));
         validateHospitalScope(group, currentUser);
 
+        if (group.getMembers() == null) {
+            group.setMembers(new ArrayList<>());
+        }
         if (!group.getMembers().contains(userId)) {
             group.getMembers().add(userId);
         }
@@ -152,9 +168,12 @@ public class WorkGroupService {
      */
     public WorkGroupDto removeMember(String id, String userId, UserDto currentUser) {
         WorkGroupDocument group = workGroupRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Grupo no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Grupo no encontrado"));
         validateHospitalScope(group, currentUser);
 
+        if (group.getMembers() == null) {
+            group.setMembers(new ArrayList<>());
+        }
         group.setMembers(group.getMembers().stream()
                 .filter(memberId -> !memberId.equals(userId))
                 .collect(Collectors.toList()));
@@ -169,8 +188,8 @@ public class WorkGroupService {
      * Valida que el grupo pertenece al mismo hospital que el usuario.
      */
     private void validateHospitalScope(WorkGroupDocument group, UserDto user) {
-        if (user.getHospitalId() == null || !group.getHospitalId().equals(String.valueOf(user.getHospitalId()))) {
-            throw new IllegalArgumentException("No puedes acceder a este grupo");
+        if (user.getHospitalId() == null || !group.getHospitalId().equals(user.getHospitalId())) {
+            throw new ForbiddenException("No puedes acceder a este grupo");
         }
     }
 

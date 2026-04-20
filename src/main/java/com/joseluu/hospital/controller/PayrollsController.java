@@ -5,6 +5,8 @@ import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.entity.enums.PayrollStatus;
 import com.joseluu.hospital.service.AuthService;
 import com.joseluu.hospital.service.PayrollService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.http.MediaType;
@@ -63,7 +65,7 @@ public class PayrollsController {
      * Actualiza el estado de una nomina.
      */
     @PatchMapping("/{id}/status")
-    public PayrollDto updateStatus(@PathVariable String id, @RequestBody StatusUpdate request) {
+    public PayrollDto updateStatus(@PathVariable String id, @Valid @RequestBody StatusUpdate request) {
         return payrollService.updateStatus(id, request.getStatus());
     }
 
@@ -84,6 +86,7 @@ public class PayrollsController {
     @Setter
     @Getter
     public static class StatusUpdate {
+        @NotNull(message = "El estado es obligatorio")
         private PayrollStatus status;
 
     }

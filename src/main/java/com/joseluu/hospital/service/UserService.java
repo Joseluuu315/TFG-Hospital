@@ -10,6 +10,7 @@ import com.joseluu.hospital.entity.CalendarEventDocument;
 import com.joseluu.hospital.entity.HospitalDocument;
 import com.joseluu.hospital.entity.UserDocument;
 import com.joseluu.hospital.entity.enums.UserRole;
+import com.joseluu.hospital.exception.NotFoundException;
 import com.joseluu.hospital.repository.HospitalRepository;
 import com.joseluu.hospital.repository.LeaveRequestRepository;
 import com.joseluu.hospital.repository.UserRepository;
@@ -58,14 +59,30 @@ public class UserService {
     }
 
     /**
+     * Obtiene un usuario por id o lanza error.
+     */
+    public UserDto getById(String id) {
+        return findById(id)
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+    }
+
+    /**
      * Obtiene los eventos de calendario de un usuario para un mes dado.
      */
     public List<CalendarEventDto> getCalendarEvents(String userId, String month) {
-        return userRepository.findById(userId)
-                .map(UserDocument::getCalendarEvents)
+        UserDocument user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+
+        return Optional.ofNullable(user.getCalendarEvents())
+                .orElse(Collections.emptyList())
                 .stream()
-                .flatMap(List::stream)
-                .filter(event -> month == null || event.getDate().startsWith(month))
+                .filter(event -> {
+                    if (month == null) {
+                        return true;
+                    }
+                    String date = event.getDate();
+                    return date != null && date.startsWith(month);
+                })
                 .map(this::toCalendarEvent)
                 .collect(Collectors.toList());
     }
@@ -75,7 +92,19 @@ public class UserService {
      */
     public UserDto createWorker(CreateUserRequestDto request) {
         LocalDateTime now = LocalDateTime.now();
-        Optional<HospitalDocument> hospital = hospitalRepository.findAll().stream().findFirst();
+        HospitalDocument hospital = hospitalRepository.findById(request.getHospitalId())
+                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
+        UserRole role = request.getRole() != null ? request.getRole() : UserRole.WORKER;
+        String department = request.getDepartment();
+        String jobTitle = request.getJobTitle();
+        if (role == UserRole.HOSPITAL_ADMIN) {
+            if (department == null || department.isBlank()) {
+                department = "Administracion";
+            }
+            if (jobTitle == null || jobTitle.isBlank()) {
+                jobTitle = "Administrador del hospital";
+            }
+        }
 
         UserDocument document = UserDocument.builder()
                 .id(UUID.randomUUID().toString())
@@ -85,13 +114,13 @@ public class UserService {
                 .email(request.getEmail())
                 .phone(request.getPhone())
                 .dni(request.getDni())
-                .role(UserRole.WORKER)
+                .role(role)
                 .enabled(true)
                 .accountNonLocked(true)
-                .hospitalId(hospital.map(HospitalDocument::getId).orElse(null))
-                .hospitalName(hospital.map(HospitalDocument::getName).orElse(null))
-                .department(request.getDepartment())
-                .jobTitle(request.getJobTitle())
+                .hospitalId(hospital.getId())
+                .hospitalName(hospital.getName())
+                .department(department)
+                .jobTitle(jobTitle)
                 .baseSalary(request.getBaseSalary())
                 .hireDate(now.toLocalDate().toString())
                 .calendarEvents(new ArrayList<>())
@@ -109,13 +138,47 @@ public class UserService {
      */
     public UserDto updateUser(String userId, UpdateUserRequestDto request) {
         UserDocument user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
 
-        user.setFirstName(request.getFirstName());
-        user.setLastName(request.getLastName());
-        user.setEmail(request.getEmail());
-        user.setDni(request.getDni());
-        user.setImageURL(request.getImageURL());
+        if (request.getFirstName() != null) {
+            user.setFirstName(request.getFirstName());
+        }
+        if (request.getLastName() != null) {
+            user.setLastName(request.getLastName());
+        }
+        if (request.getEmail() != null) {
+            user.setEmail(request.getEmail());
+        }
+        if (request.getPhone() != null) {
+            user.setPhone(request.getPhone());
+        }
+        if (request.getDni() != null) {
+            user.setDni(request.getDni());
+        }
+        if (request.getImageURL() != null) {
+            user.setImageURL(request.getImageURL());
+        }
+        if (request.getRole() != null) {
+            user.setRole(request.getRole());
+        }
+        if (request.getDepartment() != null) {
+            user.setDepartment(request.getDepartment());
+        }
+        if (request.getJobTitle() != null) {
+            user.setJobTitle(request.getJobTitle());
+        }
+        if (request.getBaseSalary() != null) {
+            user.setBaseSalary(request.getBaseSalary());
+        }
+        if (request.getEnabled() != null) {
+            user.setEnabled(request.getEnabled());
+        }
+        if (request.getAccountNonLocked() != null) {
+            user.setAccountNonLocked(request.getAccountNonLocked());
+        }
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            user.setPassword(request.getPassword());
+        }
         user.setUpdatedAt(LocalDateTime.now().toString());
 
         return toDto(userRepository.save(user));
@@ -170,9 +233,12 @@ public class UserService {
         return LeaveRequestDto.builder()
                 .id(document.getId())
                 .userId(document.getUserId())
+                .hospitalId(document.getHospitalId())
                 .startDate(document.getStartDate())
                 .endDate(document.getEndDate())
                 .reason(document.getReason())
+                .leaveType(document.getLeaveType())
+                .paid(document.isPaid())
                 .status(document.getStatus())
                 .requestedAt(document.getRequestedAt())
                 .reviewedAt(document.getReviewedAt())

@@ -5,6 +5,7 @@ import com.joseluu.hospital.dto.LoginRequestDto;
 import com.joseluu.hospital.dto.RefreshTokenRequestDto;
 import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.service.AuthService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,7 +30,7 @@ public class AuthController {
      * Inicia sesion con credenciales y devuelve tokens.
      */
     @PostMapping("/login")
-    public AuthResponseDto login(@RequestBody LoginRequestDto request) {
+    public AuthResponseDto login(@Valid @RequestBody LoginRequestDto request) {
         return authService.login(request);
     }
 
@@ -37,7 +38,7 @@ public class AuthController {
      * Genera un nuevo access token a partir del refresh token.
      */
     @PostMapping("/refresh")
-    public AuthResponseDto refresh(@RequestBody RefreshTokenRequestDto request) {
+    public AuthResponseDto refresh(@Valid @RequestBody RefreshTokenRequestDto request) {
         return authService.refresh(request);
     }
 

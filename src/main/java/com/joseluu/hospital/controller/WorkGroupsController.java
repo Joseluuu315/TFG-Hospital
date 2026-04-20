@@ -6,6 +6,7 @@ import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.dto.WorkGroupDto;
 import com.joseluu.hospital.service.AuthService;
 import com.joseluu.hospital.service.WorkGroupService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -49,7 +50,7 @@ public class WorkGroupsController {
      */
     @PostMapping
     public WorkGroupDto create(@RequestHeader(name = "Authorization", required = false) String authorization,
-                               @RequestBody CreateWorkGroupRequestDto request) {
+                               @Valid @RequestBody CreateWorkGroupRequestDto request) {
         UserDto user = authService.getUserFromBearer(authorization);
         return workGroupService.create(request, user);
     }
@@ -60,7 +61,7 @@ public class WorkGroupsController {
     @PutMapping("/{id}")
     public WorkGroupDto update(@RequestHeader(name = "Authorization", required = false) String authorization,
                                @PathVariable String id,
-                               @RequestBody CreateWorkGroupRequestDto request) {
+                               @Valid @RequestBody CreateWorkGroupRequestDto request) {
         UserDto user = authService.getUserFromBearer(authorization);
         return workGroupService.update(id, request, user);
     }
@@ -82,7 +83,7 @@ public class WorkGroupsController {
     @PostMapping("/{id}/members")
     public WorkGroupDto addMember(@RequestHeader(name = "Authorization", required = false) String authorization,
                                   @PathVariable String id,
-                                  @RequestBody UpdateWorkGroupMembersRequestDto request) {
+                                  @Valid @RequestBody UpdateWorkGroupMembersRequestDto request) {
         UserDto user = authService.getUserFromBearer(authorization);
         return workGroupService.addMember(id, request.getUserId(), user);
     }

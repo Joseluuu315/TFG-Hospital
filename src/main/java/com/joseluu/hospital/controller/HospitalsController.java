@@ -7,6 +7,8 @@ import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.entity.enums.HospitalStatus;
 import com.joseluu.hospital.service.AuthService;
 import com.joseluu.hospital.service.HospitalService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -46,7 +48,7 @@ public class HospitalsController {
      * Crea un hospital con el administrador asignado.
      */
     @PostMapping
-    public HospitalDto create(@RequestBody CreateHospitalRequestDto request) {
+    public HospitalDto create(@Valid @RequestBody CreateHospitalRequestDto request) {
         return hospitalService.create(request);
     }
 
@@ -62,7 +64,7 @@ public class HospitalsController {
      * Cambia el estado (activo, suspendido, etc.) de un hospital.
      */
     @PatchMapping("/{id}/status")
-    public HospitalDto updateStatus(@PathVariable String id, @RequestBody StatusUpdate request) {
+    public HospitalDto updateStatus(@PathVariable String id, @Valid @RequestBody StatusUpdate request) {
         return hospitalService.updateStatus(id, request.getStatus());
     }
 
@@ -110,6 +112,7 @@ public class HospitalsController {
      * Payload minimo para cambios de estado.
      */
     public static class StatusUpdate {
+        @NotNull(message = "El estado es obligatorio")
         private HospitalStatus status;
 
         public HospitalStatus getStatus() {

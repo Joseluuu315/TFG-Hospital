@@ -27,6 +27,79 @@ interface NewChatDialogProps {
   isAdmin?: boolean;
 }
 
+function WorkerRow({
+  worker,
+  onClick,
+  checked,
+  onToggleMember,
+}: {
+  worker: Worker;
+  onClick?: () => void;
+  checked?: boolean;
+  onToggleMember?: (userId: string) => void;
+}) {
+  const initials = `${worker.nombre[0] ?? ''}${worker.apellidos[0] ?? ''}`.toUpperCase();
+
+  return (
+      <div
+          onClick={onClick}
+          className={cn(
+              'flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 transition-colors',
+              checked ? 'bg-slate-900' : 'hover:bg-slate-50'
+          )}
+      >
+        {checked !== undefined && onToggleMember && (
+            <Checkbox
+                checked={checked}
+                onCheckedChange={() => onToggleMember(worker.id)}
+                className="shrink-0"
+                aria-label={`Seleccionar ${worker.nombre}`}
+            />
+        )}
+        <div className={cn(
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white',
+            'bg-gradient-to-br from-slate-600 to-slate-800'
+        )}>
+          {initials}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className={cn('truncate text-sm font-medium', checked ? 'text-white' : 'text-slate-800')}>
+            {worker.nombre} {worker.apellidos}
+          </p>
+          <p className="truncate text-xs text-slate-400">
+            {worker.departamento}
+          </p>
+        </div>
+      </div>
+  );
+}
+
+function SearchBox({
+  id,
+  value,
+  onChange,
+  resultsId,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  resultsId: string;
+}) {
+  return (
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+        <Input
+            id={id}
+            placeholder="Buscar por nombre o departamento..."
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="h-9 rounded-xl border-slate-200 bg-slate-50 pl-8 text-xs placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-cyan-400"
+            aria-describedby={resultsId}
+        />
+      </div>
+  );
+}
+
 export function NewChatDialog({
                                 open,
                                 onOpenChange,
@@ -79,60 +152,6 @@ export function NewChatDialog({
     );
   };
 
-  const getInitials = (w: Worker) =>
-      `${w.nombre[0] ?? ''}${w.apellidos[0] ?? ''}`.toUpperCase();
-
-  const WorkerRow = ({ worker, onClick, checked }: {
-    worker: Worker;
-    onClick?: () => void;
-    checked?: boolean;
-  }) => (
-      <div
-          onClick={onClick}
-          className={cn(
-              'flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 transition-colors',
-              checked ? 'bg-slate-900' : 'hover:bg-slate-50'
-          )}
-      >
-        {checked !== undefined && (
-            <Checkbox
-                checked={checked}
-                onCheckedChange={() => toggleMember(worker.id)}
-                className="shrink-0"
-                aria-label={`Seleccionar ${worker.nombre}`}
-            />
-        )}
-        <div className={cn(
-            'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white',
-            'bg-gradient-to-br from-slate-600 to-slate-800'
-        )}>
-          {getInitials(worker)}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className={cn('truncate text-sm font-medium', checked ? 'text-white' : 'text-slate-800')}>
-            {worker.nombre} {worker.apellidos}
-          </p>
-          <p className={cn('truncate text-xs', checked ? 'text-slate-400' : 'text-slate-400')}>
-            {worker.departamento}
-          </p>
-        </div>
-      </div>
-  );
-
-  const SearchBox = ({ id }: { id: string }) => (
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-        <Input
-            id={id}
-            placeholder="Buscar por nombre o departamento..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-9 rounded-xl border-slate-200 bg-slate-50 pl-8 text-xs placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-cyan-400"
-            aria-describedby={resultsId}
-        />
-      </div>
-  );
-
   return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-md">
@@ -171,7 +190,7 @@ export function NewChatDialog({
                 <div className="px-5 py-4 space-y-3">
                   {activeTab === 'private' && (
                       <>
-                        <SearchBox id={privateSearchId} />
+                        <SearchBox id={privateSearchId} value={searchQuery} onChange={setSearchQuery} resultsId={resultsId} />
                         <ScrollArea className="h-64">
                           <div className="space-y-0.5 pr-1">
                             {filteredWorkers.length > 0
@@ -208,7 +227,7 @@ export function NewChatDialog({
                         </span>
                             )}
                           </Label>
-                          <SearchBox id={`group-search-${groupNameId}`} />
+                          <SearchBox id={`group-search-${groupNameId}`} value={searchQuery} onChange={setSearchQuery} resultsId={resultsId} />
                         </div>
                         <ScrollArea className="h-44">
                           <div className="space-y-0.5 pr-1">
@@ -219,6 +238,7 @@ export function NewChatDialog({
                                         worker={w}
                                         checked={selectedMembers.includes(w.id)}
                                         onClick={() => toggleMember(w.id)}
+                                        onToggleMember={toggleMember}
                                     />
                                 ))
                                 : <EmptyState />
@@ -239,7 +259,7 @@ export function NewChatDialog({
               </div>
           ) : (
               <div className="px-5 py-4 space-y-3">
-                <SearchBox id={privateSearchId} />
+                <SearchBox id={privateSearchId} value={searchQuery} onChange={setSearchQuery} resultsId={resultsId} />
                 <ScrollArea className="h-64">
                   <div className="space-y-0.5 pr-1">
                     {filteredWorkers.length > 0
