@@ -69,6 +69,39 @@ public class UserService {
     /**
      * Obtiene los eventos de calendario de un usuario para un mes dado.
      */
+    /** Añade un evento al calendario de un trabajador. */
+    public CalendarEventDto addCalendarEvent(String userId, CalendarEventDto dto) {
+        UserDocument user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+        if (user.getCalendarEvents() == null) {
+            user.setCalendarEvents(new ArrayList<>());
+        }
+        CalendarEventDocument event = CalendarEventDocument.builder()
+                .id(UUID.randomUUID().toString())
+                .userId(userId)
+                .date(dto.getDate())
+                .type(dto.getType())
+                .startTime(dto.getStartTime())
+                .endTime(dto.getEndTime())
+                .notes(dto.getNotes())
+                .build();
+        user.getCalendarEvents().add(event);
+        user.setUpdatedAt(LocalDateTime.now().toString());
+        userRepository.save(user);
+        return toCalendarEvent(event);
+    }
+
+    /** Elimina un evento del calendario de un trabajador. */
+    public void removeCalendarEvent(String userId, String eventId) {
+        UserDocument user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+        if (user.getCalendarEvents() != null) {
+            user.getCalendarEvents().removeIf(e -> eventId.equals(e.getId()));
+            user.setUpdatedAt(LocalDateTime.now().toString());
+            userRepository.save(user);
+        }
+    }
+
     public List<CalendarEventDto> getCalendarEvents(String userId, String month) {
         UserDocument user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));

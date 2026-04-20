@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { DashboardLoading } from '@/components/dashboard/dashboard-loading';
@@ -11,10 +11,43 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { hospitalSettingsApi, schedulingApi, shiftTypesApi, usersApi, type HospitalSettings, type ShiftAssignment, type ShiftType, type User } from '@/lib/api';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  hospitalSettingsApi,
+  schedulingApi,
+  shiftTypesApi,
+  usersApi,
+  type HospitalSettings,
+  type ShiftAssignment,
+  type ShiftType,
+  type User,
+} from '@/lib/api';
 import { toast } from 'sonner';
-import { Settings2, Sparkles, TimerReset, UsersRound } from 'lucide-react';
+import {
+  Settings2,
+  Sparkles,
+  TimerReset,
+  UsersRound,
+  AlertCircle,
+  X,
+} from 'lucide-react';
 import { formatDate } from '@/lib/formatters';
+
+const DEPARTMENTS = [
+  'UCI',
+  'Urgencias',
+  'Pediatria',
+  'Cardiologia',
+  'Neurologia',
+  'Administracion',
+  'Laboratorio',
+];
 
 const defaultSettings: HospitalSettings = {
   hospitalId: '',
@@ -57,18 +90,18 @@ export default function AdminOperationsPage() {
     startDate: new Date().toISOString().slice(0, 10),
     endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
   });
-  const [assignedShifts, setAssignedShifts] = useState<ShiftAssignment[]>([]);
+  const [existingAssignments, setExistingAssignments] = useState<ShiftAssignment[]>([]);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isCreatingShiftType, setIsCreatingShiftType] = useState(false);
   const [isCreatingRequirement, setIsCreatingRequirement] = useState(false);
   const [isAutoAssigning, setIsAutoAssigning] = useState(false);
+  const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
 
   useEffect(() => {
     if (!hospitalId) {
       setIsLoading(false);
       return;
     }
-
     const load = async () => {
       try {
         const [settingsRes, shiftTypesRes, usersRes] = await Promise.all([
@@ -78,27 +111,47 @@ export default function AdminOperationsPage() {
         ]);
         setSettings(settingsRes.data);
         setShiftTypes(shiftTypesRes.data);
-        setWorkers(usersRes.data.filter((candidate) => candidate.role === 'WORKER' && String(candidate.hospitalId) === hospitalId));
+        setWorkers(
+          usersRes.data.filter(
+            (c) => c.role === 'WORKER' && String(c.hospitalId) === hospitalId,
+          ),
+        );
       } catch (error) {
         console.error(error);
         setSettings({ ...defaultSettings, hospitalId });
-        setShiftTypes([]);
-        setWorkers([]);
         toast.error('No se pudieron cargar las operaciones del hospital');
       } finally {
         setIsLoading(false);
       }
     };
-
     load();
   }, [hospitalId]);
 
-  if (isLoading) {
-    return <DashboardLoading />;
-  }
+  const loadAssignmentsForRange = useCallback(async () => {
+    if (!hospitalId) return;
+    setIsLoadingAssignments(true);
+    try {
+      const res = await schedulingApi.getAssignments(
+        hospitalId,
+        autoAssignRange.startDate,
+        autoAssignRange.endDate,
+      );
+      setExistingAssignments(res.data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsLoadingAssignments(false);
+    }
+  }, [hospitalId, autoAssignRange.startDate, autoAssignRange.endDate]);
+
+  useEffect(() => {
+    void loadAssignmentsForRange();
+  }, [loadAssignmentsForRange]);
+
+  if (isLoading) return <DashboardLoading />;
 
   const updateSettings = <K extends keyof HospitalSettings>(key: K, value: HospitalSettings[K]) => {
-    setSettings((current) => ({ ...current, [key]: value }));
+    setSettings((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleSaveSettings = async () => {
@@ -122,7 +175,7 @@ export default function AdminOperationsPage() {
     setIsCreatingShiftType(true);
     try {
       const response = await shiftTypesApi.create(hospitalId, shiftTypeForm);
-      setShiftTypes((current) => [...current, response.data]);
+      setShiftTypes((prev) => [...prev, response.data]);
       setShiftTypeForm(defaultShiftType);
       toast.success('Tipo de turno creado');
     } catch (error) {
@@ -136,6 +189,14 @@ export default function AdminOperationsPage() {
   const handleCreateRequirement = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!hospitalId) return;
+    if (!requirementForm.shiftTypeCode) {
+      toast.error('Selecciona un tipo de turno');
+      return;
+    }
+    if (!requirementForm.department) {
+      toast.error('Selecciona un departamento');
+      return;
+    }
     setIsCreatingRequirement(true);
     try {
       await schedulingApi.createRequirement(hospitalId, requirementForm);
@@ -154,21 +215,40 @@ export default function AdminOperationsPage() {
     setIsAutoAssigning(true);
     try {
       const response = await schedulingApi.autoAssign(hospitalId, autoAssignRange);
-      setAssignedShifts(response.data);
-      toast.success(`Asignados ${response.data.length} turnos`);
-    } catch (error) {
+      toast.success(`Asignados ${response.data.length} turnos correctamente`);
+      // Recargamos el listado completo del rango para mostrar todo
+      await loadAssignmentsForRange();
+    } catch (error: unknown) {
       console.error(error);
-      toast.error('No se pudo ejecutar la autoasignación');
+      const msg =
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'No se pudo ejecutar la autoasignación';
+      toast.error(msg);
     } finally {
       setIsAutoAssigning(false);
     }
   };
+
+  const handleCancelAssignment = async (shiftId: string) => {
+    if (!hospitalId) return;
+    try {
+      await schedulingApi.cancelAssignment(hospitalId, shiftId);
+      setExistingAssignments((prev) => prev.filter((a) => a.id !== shiftId));
+      toast.success('Asignación cancelada');
+    } catch (error) {
+      console.error(error);
+      toast.error('No se pudo cancelar la asignación');
+    }
+  };
+
+  const shiftTypeCodes = shiftTypes.map((st) => st.code);
 
   return (
     <DashboardShell
       title="Operaciones Hospitalarias"
       description="Configura reglas, define tipos de turno y lanza planificación automática"
     >
+      {/* Métricas resumen */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
@@ -190,15 +270,16 @@ export default function AdminOperationsPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Autoasignación</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Asignaciones en rango</CardTitle>
           </CardHeader>
           <CardContent className="flex items-center justify-between">
-            <div className="text-3xl font-semibold">{assignedShifts.length}</div>
+            <div className="text-3xl font-semibold">{existingAssignments.length}</div>
             <Sparkles className="h-5 w-5 text-amber-600" />
           </CardContent>
         </Card>
       </div>
 
+      {/* Reglas del hospital */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -214,7 +295,7 @@ export default function AdminOperationsPage() {
               <Input type="number" value={settings.maxWeeklyHours} onChange={(e) => updateSettings('maxWeeklyHours', Number(e.target.value))} />
             </div>
             <div className="space-y-2">
-              <Label>Descanso mínimo entre turnos</Label>
+              <Label>Descanso mínimo entre turnos (h)</Label>
               <Input type="number" value={settings.minRestHours} onChange={(e) => updateSettings('minRestHours', Number(e.target.value))} />
             </div>
             <div className="space-y-2">
@@ -234,11 +315,11 @@ export default function AdminOperationsPage() {
               <Input type="number" step="0.1" value={settings.overtimeMultiplier} onChange={(e) => updateSettings('overtimeMultiplier', Number(e.target.value))} />
             </div>
             <div className="space-y-2">
-              <Label>Plus nocturno</Label>
+              <Label>Plus nocturno (%)</Label>
               <Input type="number" step="0.01" value={settings.nightBonusPct} onChange={(e) => updateSettings('nightBonusPct', Number(e.target.value))} />
             </div>
             <div className="space-y-2">
-              <Label>Plus festivo</Label>
+              <Label>Plus festivo (%)</Label>
               <Input type="number" step="0.01" value={settings.holidayBonusPct} onChange={(e) => updateSettings('holidayBonusPct', Number(e.target.value))} />
             </div>
             <div className="flex items-end justify-between rounded-lg border p-4">
@@ -256,35 +337,44 @@ export default function AdminOperationsPage() {
       </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
+        {/* Tipos de turno */}
         <Card>
           <CardHeader>
             <CardTitle>Tipos de turno</CardTitle>
-            <CardDescription>Define mañana, tarde, noche o cualquier patrón especial de tu hospital.</CardDescription>
+            <CardDescription>Define mañana, tarde, noche o cualquier patrón especial.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <form onSubmit={handleCreateShiftType} className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Código</Label>
-                <Input value={shiftTypeForm.code} onChange={(e) => setShiftTypeForm((current) => ({ ...current, code: e.target.value.toUpperCase() }))} required />
+                <Input
+                  value={shiftTypeForm.code}
+                  onChange={(e) => setShiftTypeForm((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label>Nombre</Label>
-                <Input value={shiftTypeForm.name} onChange={(e) => setShiftTypeForm((current) => ({ ...current, name: e.target.value }))} required />
+                <Input
+                  value={shiftTypeForm.name}
+                  onChange={(e) => setShiftTypeForm((prev) => ({ ...prev, name: e.target.value }))}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label>Hora inicio</Label>
-                <Input type="time" value={shiftTypeForm.startTime} onChange={(e) => setShiftTypeForm((current) => ({ ...current, startTime: e.target.value }))} required />
+                <Input type="time" value={shiftTypeForm.startTime} onChange={(e) => setShiftTypeForm((prev) => ({ ...prev, startTime: e.target.value }))} required />
               </div>
               <div className="space-y-2">
                 <Label>Hora fin</Label>
-                <Input type="time" value={shiftTypeForm.endTime} onChange={(e) => setShiftTypeForm((current) => ({ ...current, endTime: e.target.value }))} required />
+                <Input type="time" value={shiftTypeForm.endTime} onChange={(e) => setShiftTypeForm((prev) => ({ ...prev, endTime: e.target.value }))} required />
               </div>
               <div className="flex items-end justify-between rounded-lg border p-4 md:col-span-2">
                 <div>
                   <p className="font-medium">Cruza medianoche</p>
                   <p className="text-sm text-muted-foreground">Actívalo para turno noche o guardias largas</p>
                 </div>
-                <Switch checked={shiftTypeForm.crossesMidnight} onCheckedChange={(checked) => setShiftTypeForm((current) => ({ ...current, crossesMidnight: checked }))} />
+                <Switch checked={shiftTypeForm.crossesMidnight} onCheckedChange={(checked) => setShiftTypeForm((prev) => ({ ...prev, crossesMidnight: checked }))} />
               </div>
               <Button type="submit" className="md:col-span-2" disabled={isCreatingShiftType}>
                 {isCreatingShiftType ? 'Creando...' : 'Crear tipo de turno'}
@@ -296,71 +386,147 @@ export default function AdminOperationsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Código</TableHead>
+                    <TableHead>Nombre</TableHead>
                     <TableHead>Horario</TableHead>
                     <TableHead>Noche</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {shiftTypes.map((shiftType) => (
-                    <TableRow key={shiftType.id ?? shiftType.code}>
-                      <TableCell className="font-medium">{shiftType.code}</TableCell>
-                      <TableCell>{shiftType.startTime} - {shiftType.endTime}</TableCell>
-                      <TableCell>
-                        <Badge variant={shiftType.crossesMidnight ? 'default' : 'secondary'}>
-                          {shiftType.crossesMidnight ? 'Sí' : 'No'}
-                        </Badge>
+                  {shiftTypes.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center text-muted-foreground">
+                        No hay tipos de turno creados aún.
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    shiftTypes.map((st) => (
+                      <TableRow key={st.id ?? st.code}>
+                        <TableCell className="font-medium">{st.code}</TableCell>
+                        <TableCell>{st.name}</TableCell>
+                        <TableCell>{st.startTime} – {st.endTime}</TableCell>
+                        <TableCell>
+                          <Badge variant={st.crossesMidnight ? 'default' : 'secondary'}>
+                            {st.crossesMidnight ? 'Sí' : 'No'}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </div>
           </CardContent>
         </Card>
 
+        {/* Demanda y autoasignación */}
         <Card>
           <CardHeader>
             <CardTitle>Demanda y autoasignación</CardTitle>
             <CardDescription>Registra necesidades por día y dispara el planificador automático.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
+            {/* Advertencia si no hay tipos de turno */}
+            {shiftTypes.length === 0 && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-600">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>Primero crea al menos un tipo de turno antes de registrar demandas.</span>
+              </div>
+            )}
+
             <form onSubmit={handleCreateRequirement} className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Fecha</Label>
-                <Input type="date" value={requirementForm.date} onChange={(e) => setRequirementForm((current) => ({ ...current, date: e.target.value }))} required />
+                <Input
+                  type="date"
+                  value={requirementForm.date}
+                  onChange={(e) => setRequirementForm((prev) => ({ ...prev, date: e.target.value }))}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label>Departamento</Label>
-                <Input value={requirementForm.department} onChange={(e) => setRequirementForm((current) => ({ ...current, department: e.target.value }))} required />
+                <Select
+                  value={requirementForm.department}
+                  onValueChange={(value) => setRequirementForm((prev) => ({ ...prev, department: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar departamento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEPARTMENTS.map((dept) => (
+                      <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label>Tipo de turno</Label>
-                <Input value={requirementForm.shiftTypeCode} onChange={(e) => setRequirementForm((current) => ({ ...current, shiftTypeCode: e.target.value.toUpperCase() }))} required />
+                <Select
+                  value={requirementForm.shiftTypeCode}
+                  onValueChange={(value) => setRequirementForm((prev) => ({ ...prev, shiftTypeCode: value }))}
+                  disabled={shiftTypes.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={shiftTypes.length === 0 ? 'Sin tipos disponibles' : 'Seleccionar turno'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {shiftTypeCodes.map((code) => (
+                      <SelectItem key={code} value={code}>{code}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label>Trabajadores requeridos</Label>
-                <Input type="number" min={1} value={requirementForm.requiredWorkers} onChange={(e) => setRequirementForm((current) => ({ ...current, requiredWorkers: Number(e.target.value) }))} required />
+                <Input
+                  type="number"
+                  min={1}
+                  value={requirementForm.requiredWorkers}
+                  onChange={(e) => setRequirementForm((prev) => ({ ...prev, requiredWorkers: Number(e.target.value) }))}
+                  required
+                />
               </div>
-              <Button type="submit" className="md:col-span-2" disabled={isCreatingRequirement}>
+              <Button type="submit" className="md:col-span-2" disabled={isCreatingRequirement || shiftTypes.length === 0}>
                 {isCreatingRequirement ? 'Guardando...' : 'Registrar demanda'}
               </Button>
             </form>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Desde</Label>
-                <Input type="date" value={autoAssignRange.startDate} onChange={(e) => setAutoAssignRange((current) => ({ ...current, startDate: e.target.value }))} />
+            {/* Rango de autoasignación */}
+            <div className="space-y-3 rounded-lg border p-4">
+              <p className="font-medium text-sm">Autoasignación por rango de fechas</p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Desde</Label>
+                  <Input
+                    type="date"
+                    value={autoAssignRange.startDate}
+                    onChange={(e) => setAutoAssignRange((prev) => ({ ...prev, startDate: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Hasta</Label>
+                  <Input
+                    type="date"
+                    value={autoAssignRange.endDate}
+                    onChange={(e) => setAutoAssignRange((prev) => ({ ...prev, endDate: e.target.value }))}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Hasta</Label>
-                <Input type="date" value={autoAssignRange.endDate} onChange={(e) => setAutoAssignRange((current) => ({ ...current, endDate: e.target.value }))} />
-              </div>
+              <Button onClick={handleAutoAssign} disabled={isAutoAssigning} className="w-full">
+                {isAutoAssigning ? 'Planificando...' : '🚀 Lanzar autoasignación'}
+              </Button>
             </div>
-            <Button onClick={handleAutoAssign} disabled={isAutoAssigning}>
-              {isAutoAssigning ? 'Planificando...' : 'Lanzar autoasignación'}
-            </Button>
 
+            {/* Tabla de asignaciones del rango */}
             <div className="rounded-lg border">
+              <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
+                <p className="text-sm font-medium text-muted-foreground">
+                  Asignaciones en el rango ({existingAssignments.length})
+                </p>
+                <Button variant="ghost" size="sm" onClick={loadAssignmentsForRange} disabled={isLoadingAssignments}>
+                  {isLoadingAssignments ? 'Cargando...' : 'Actualizar'}
+                </Button>
+              </div>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -368,25 +534,41 @@ export default function AdminOperationsPage() {
                     <TableHead>Fecha</TableHead>
                     <TableHead>Turno</TableHead>
                     <TableHead>Fuente</TableHead>
+                    <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {assignedShifts.length === 0 ? (
+                  {existingAssignments.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground">
-                        Aún no hay turnos asignados en esta sesión.
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
+                        No hay asignaciones en este rango de fechas.
                       </TableCell>
                     </TableRow>
-                  ) : assignedShifts.map((assignment) => (
-                    <TableRow key={assignment.id}>
-                      <TableCell className="font-medium">{assignment.workerFullName}</TableCell>
-                      <TableCell>{formatDate(assignment.startAt)}</TableCell>
-                      <TableCell>{assignment.shiftTypeCode}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{assignment.source}</Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  ) : (
+                    existingAssignments.map((assignment) => (
+                      <TableRow key={assignment.id}>
+                        <TableCell className="font-medium">{assignment.workerFullName}</TableCell>
+                        <TableCell>{formatDate(assignment.startAt)}</TableCell>
+                        <TableCell>{assignment.shiftTypeCode}</TableCell>
+                        <TableCell>
+                          <Badge variant={assignment.source === 'AUTO' ? 'default' : 'outline'}>
+                            {assignment.source}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => handleCancelAssignment(assignment.id)}
+                            aria-label="Cancelar asignación"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </div>

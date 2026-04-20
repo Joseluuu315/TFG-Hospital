@@ -1,12 +1,14 @@
 package com.joseluu.hospital.controller;
 
 import com.joseluu.hospital.dto.AutoAssignShiftsRequestDto;
+import com.joseluu.hospital.dto.ManualShiftRequestDto;
 import com.joseluu.hospital.dto.ShiftAssignmentDto;
 import com.joseluu.hospital.dto.ShiftRequirementDto;
 import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.service.AuthService;
 import com.joseluu.hospital.service.SchedulingService;
 import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,22 +23,59 @@ public class SchedulingController {
         this.authService = authService;
     }
 
+    /** Crea una demanda de turno para un hospital. */
     @PostMapping("/api/hospitals/{hospitalId}/shift-requirements")
-    public ShiftRequirementDto createRequirement(@PathVariable String hospitalId,
-                                                 @Valid @RequestBody ShiftRequirementDto request) {
+    public ShiftRequirementDto createRequirement(
+            @PathVariable String hospitalId,
+            @Valid @RequestBody ShiftRequirementDto request) {
         return schedulingService.createRequirement(hospitalId, request);
     }
 
+    /** Lanza la autoasignación para un rango de fechas. */
     @PostMapping("/api/hospitals/{hospitalId}/shifts/auto-assign")
-    public List<ShiftAssignmentDto> autoAssign(@RequestHeader(name = "Authorization", required = false) String authorization,
-                                               @PathVariable String hospitalId,
-                                               @Valid @RequestBody AutoAssignShiftsRequestDto request) {
+    public List<ShiftAssignmentDto> autoAssign(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String hospitalId,
+            @Valid @RequestBody AutoAssignShiftsRequestDto request) {
         UserDto actor = authService.getUserFromBearer(authorization);
-        return schedulingService.autoAssign(hospitalId, actor.getId(), request.getStartDate(), request.getEndDate());
+        return schedulingService.autoAssign(
+                hospitalId, actor.getId(), request.getStartDate(), request.getEndDate());
     }
 
+    /** Crea una asignación manual (turno, día libre, vacaciones, festivo). */
+    @PostMapping("/api/hospitals/{hospitalId}/shifts/manual")
+    public ShiftAssignmentDto manualAssign(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String hospitalId,
+            @Valid @RequestBody ManualShiftRequestDto request) {
+        UserDto actor = authService.getUserFromBearer(authorization);
+        return schedulingService.manualAssign(hospitalId, actor.getId(), request);
+    }
+
+    /** Lista las asignaciones activas del hospital (con filtros opcionales de fecha). */
+    @GetMapping("/api/hospitals/{hospitalId}/shifts")
+    public List<ShiftAssignmentDto> getAssignments(
+            @PathVariable String hospitalId,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        return schedulingService.getAssignmentsForHospital(hospitalId, startDate, endDate);
+    }
+
+    /** Cancela una asignación concreta. */
+    @DeleteMapping("/api/hospitals/{hospitalId}/shifts/{shiftId}")
+    public ResponseEntity<Void> cancelAssignment(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String hospitalId,
+            @PathVariable String shiftId) {
+        UserDto actor = authService.getUserFromBearer(authorization);
+        schedulingService.cancelAssignment(hospitalId, actor.getId(), shiftId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Devuelve los turnos del usuario autenticado. */
     @GetMapping("/api/users/me/shifts")
-    public List<ShiftAssignmentDto> getMyShifts(@RequestHeader(name = "Authorization", required = false) String authorization) {
+    public List<ShiftAssignmentDto> getMyShifts(
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
         UserDto actor = authService.getUserFromBearer(authorization);
         return schedulingService.getAssignmentsForWorker(actor.getId());
     }

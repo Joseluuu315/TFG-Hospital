@@ -368,6 +368,25 @@ export const schedulingApi = {
     api.post<ShiftRequirement>(`/hospitals/${hospitalId}/shift-requirements`, data),
   autoAssign: (hospitalId: string, data: { startDate: string; endDate: string }) =>
     api.post<ShiftAssignment[]>(`/hospitals/${hospitalId}/shifts/auto-assign`, data),
+  getAssignments: (hospitalId: string, startDate?: string, endDate?: string) => {
+    const params = new URLSearchParams();
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return api.get<ShiftAssignment[]>(`/hospitals/${hospitalId}/shifts${query}`);
+  },
+  createManual: (
+    hospitalId: string,
+    data: {
+      workerId: string;
+      date: string;
+      type: string;
+      shiftTypeCode?: string;
+      notes?: string;
+    },
+  ) => api.post<ShiftAssignment>(`/hospitals/${hospitalId}/shifts/manual`, data),
+  cancelAssignment: (hospitalId: string, shiftId: string) =>
+    api.delete(`/hospitals/${hospitalId}/shifts/${shiftId}`),
   getMyShifts: () => api.get<ShiftAssignment[]>('/users/me/shifts'),
 };
 
@@ -401,6 +420,12 @@ export const usersApi = {
   createLeaveRequest: (data: { startDate: string; endDate: string; reason: string }) =>
     api.post<LeaveRequest>('/users/me/leave-requests', data),
   getMyLeaveRequests: () => api.get<LeaveRequest[]>('/users/me/leave-requests'),
+  addCalendarEvent: (
+    userId: string,
+    data: { date: string; type: string; startTime?: string; endTime?: string; notes?: string },
+  ) => api.post<CalendarEvent>(`/users/${userId}/calendar-events`, data),
+  removeCalendarEvent: (userId: string, eventId: string) =>
+    api.delete(`/users/${userId}/calendar-events/${eventId}`),
 };
 
 export const leaveRequestsApi = {

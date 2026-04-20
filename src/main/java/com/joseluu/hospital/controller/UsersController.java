@@ -11,6 +11,7 @@ import com.joseluu.hospital.service.AuthService;
 import com.joseluu.hospital.service.LeaveRequestService;
 import com.joseluu.hospital.service.UserService;
 import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -97,13 +98,29 @@ public class UsersController {
         return leaveRequestService.createForUser(user.getId(), requestDto.getStartDate(), requestDto.getEndDate(), requestDto.getReason());
     }
 
-    /**
-     * Actualiza los datos del usuario autenticado.
-     */
+    /** Actualiza los datos del usuario autenticado. */
     @PutMapping("/me")
-    public UserDto updateMyself(@RequestHeader(name = "Authorization", required = false) String authorization,
-                                @RequestBody UpdateUserRequestDto request) {
+    public UserDto updateMyself(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestBody UpdateUserRequestDto request) {
         UserDto user = authService.getUserFromBearer(authorization);
         return userService.updateUser(user.getId(), request);
+    }
+
+    /** Añade un evento de calendario a un trabajador (uso admin). */
+    @PostMapping("/{id}/calendar-events")
+    public CalendarEventDto addCalendarEvent(
+            @PathVariable String id,
+            @Valid @RequestBody CalendarEventDto dto) {
+        return userService.addCalendarEvent(id, dto);
+    }
+
+    /** Elimina un evento de calendario de un trabajador (uso admin). */
+    @DeleteMapping("/{id}/calendar-events/{eventId}")
+    public ResponseEntity<Void> removeCalendarEvent(
+            @PathVariable String id,
+            @PathVariable String eventId) {
+        userService.removeCalendarEvent(id, eventId);
+        return ResponseEntity.noContent().build();
     }
 }
