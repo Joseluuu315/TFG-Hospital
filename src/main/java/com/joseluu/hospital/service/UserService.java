@@ -1,4 +1,3 @@
-
 package com.joseluu.hospital.service;
 
 import com.joseluu.hospital.dto.CalendarEventDto;
@@ -8,6 +7,7 @@ import com.joseluu.hospital.dto.UpdateUserRequestDto;
 import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.entity.CalendarEventDocument;
 import com.joseluu.hospital.entity.HospitalDocument;
+import com.joseluu.hospital.entity.LeaveRequestDocument;
 import com.joseluu.hospital.entity.UserDocument;
 import com.joseluu.hospital.entity.enums.UserRole;
 import com.joseluu.hospital.exception.NotFoundException;
@@ -18,11 +18,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Servicio para gestionar usuarios y sus datos asociados.
@@ -42,40 +40,36 @@ public class UserService {
     }
 
     /**
-     * Lista todos los usuarios.
+     * Lista todos los usuarios del sistema.
      */
     public List<UserDto> getAll() {
-        return userRepository.findAll().stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        List<UserDto> users = new ArrayList<>();
+        for (UserDocument document : userRepository.findAll()) {
+            users.add(toDto(document));
+        }
+        return users;
     }
 
     /**
      * Busca un usuario por id.
      */
     public Optional<UserDto> findById(String id) {
-        return userRepository.findById(id)
-                .map(this::toDto);
+        return userRepository.findById(id).map(this::toDto);
     }
 
     /**
      * Obtiene un usuario por id o lanza error.
      */
     public UserDto getById(String id) {
-        return findById(id)
-                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+        return toDto(requireUser(id));
     }
 
     /**
-     * Obtiene los eventos de calendario de un usuario para un mes dado.
+     * Anade un evento al calendario de un trabajador.
      */
-    /** Añade un evento al calendario de un trabajador. */
     public CalendarEventDto addCalendarEvent(String userId, CalendarEventDto dto) {
-        UserDocument user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
-        if (user.getCalendarEvents() == null) {
-            user.setCalendarEvents(new ArrayList<>());
-        }
+        UserDocument user = requireUser(userId);
+
         CalendarEventDocument event = CalendarEventDocument.builder()
                 .id(UUID.randomUUID().toString())
                 .userId(userId)
@@ -85,87 +79,74 @@ public class UserService {
                 .endTime(dto.getEndTime())
                 .notes(dto.getNotes())
                 .build();
-        user.getCalendarEvents().add(event);
-        user.setUpdatedAt(LocalDateTime.now().toString());
-        userRepository.save(user);
+
+        getOrCreateCalendarEvents(user).add(event);
+        saveUser(user);
         return toCalendarEvent(event);
     }
 
-    /** Elimina un evento del calendario de un trabajador. */
+    /**
+     * Elimina un evento del calendario de un trabajador.
+     */
     public void removeCalendarEvent(String userId, String eventId) {
-        UserDocument user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
-        if (user.getCalendarEvents() != null) {
-            user.getCalendarEvents().removeIf(e -> eventId.equals(e.getId()));
-            user.setUpdatedAt(LocalDateTime.now().toString());
-            userRepository.save(user);
+        UserDocument user = requireUser(userId);
+        List<CalendarEventDocument> events = user.getCalendarEvents();
+        if (events == null) {
+            return;
         }
-    }
 
-    /** Edita un evento del calendario de un trabajador. */
-    public CalendarEventDto updateCalendarEvent(String userId, String eventId, CalendarEventDto dto) {
-        UserDocument user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
-                
-        if (user.getCalendarEvents() != null) {
-            for (CalendarEventDocument e : user.getCalendarEvents()) {
-                if (eventId.equals(e.getId())) {
-                    e.setDate(dto.getDate());
-                    e.setType(dto.getType());
-                    e.setStartTime(dto.getStartTime());
-                    e.setEndTime(dto.getEndTime());
-                    e.setNotes(dto.getNotes());
-                    user.setUpdatedAt(LocalDateTime.now().toString());
-                    userRepository.save(user);
-                    return toCalendarEvent(e);
-                }
-            }
+        boolean removed = events.removeIf(event -> eventId.equals(event.getId()));
+        if (removed) {
+            saveUser(user);
         }
-        throw new NotFoundException("Evento de calendario no encontrado");
-    }
-
-    public List<CalendarEventDto> getCalendarEvents(String userId, String month) {
-        UserDocument user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
-
-        return Optional.ofNullable(user.getCalendarEvents())
-                .orElse(Collections.emptyList())
-                .stream()
-                .filter(event -> {
-                    if (month == null) {
-                        return true;
-                    }
-                    String date = event.getDate();
-                    return date != null && date.startsWith(month);
-                })
-                .map(this::toCalendarEvent)
-                .collect(Collectors.toList());
     }
 
     /**
-     * Crea un trabajador asociado al primer hospital disponible.
+     * Actualiza un evento del calendario de un trabajador.
+     */
+    public CalendarEventDto updateCalendarEvent(String userId, String eventId, CalendarEventDto dto) {
+        UserDocument user = requireUser(userId);
+        CalendarEventDocument event = requireCalendarEvent(user, eventId);
+
+        event.setDate(dto.getDate());
+        event.setType(dto.getType());
+        event.setStartTime(dto.getStartTime());
+        event.setEndTime(dto.getEndTime());
+        event.setNotes(dto.getNotes());
+
+        saveUser(user);
+        return toCalendarEvent(event);
+    }
+
+    /**
+     * Devuelve los eventos del calendario de un usuario, con filtro mensual opcional.
+     */
+    public List<CalendarEventDto> getCalendarEvents(String userId, String month) {
+        UserDocument user = requireUser(userId);
+        List<CalendarEventDto> result = new ArrayList<>();
+
+        for (CalendarEventDocument event : getCalendarEventsOrEmpty(user)) {
+            if (month == null || matchesMonth(event, month)) {
+                result.add(toCalendarEvent(event));
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Crea un trabajador asociado a un hospital.
      */
     public UserDto createWorker(CreateUserRequestDto request) {
         LocalDateTime now = LocalDateTime.now();
-        HospitalDocument hospital = hospitalRepository.findById(request.getHospitalId())
-                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
+        HospitalDocument hospital = requireHospital(request.getHospitalId());
         UserRole role = request.getRole() != null ? request.getRole() : UserRole.WORKER;
-        String department = request.getDepartment();
-        String jobTitle = request.getJobTitle();
-        if (role == UserRole.HOSPITAL_ADMIN) {
-            if (department == null || department.isBlank()) {
-                department = "Administracion";
-            }
-            if (jobTitle == null || jobTitle.isBlank()) {
-                jobTitle = "Administrador del hospital";
-            }
-        }
 
         UserDocument document = UserDocument.builder()
                 .id(UUID.randomUUID().toString())
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
-                .imageURL(request.getImageURL()) // Added imageURL
+                .imageURL(request.getImageURL())
                 .email(request.getEmail())
                 .phone(request.getPhone())
                 .dni(request.getDni())
@@ -174,8 +155,8 @@ public class UserService {
                 .accountNonLocked(true)
                 .hospitalId(hospital.getId())
                 .hospitalName(hospital.getName())
-                .department(department)
-                .jobTitle(jobTitle)
+                .department(resolveDepartment(role, request.getDepartment()))
+                .jobTitle(resolveJobTitle(role, request.getJobTitle()))
                 .baseSalary(request.getBaseSalary())
                 .hireDate(now.toLocalDate().toString())
                 .calendarEvents(new ArrayList<>())
@@ -189,75 +170,38 @@ public class UserService {
     }
 
     /**
-     * Actualiza los datos de un usuario.
+     * Actualiza los datos editables de un usuario.
      */
     public UserDto updateUser(String userId, UpdateUserRequestDto request) {
-        UserDocument user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+        UserDocument user = requireUser(userId);
 
-        if (request.getFirstName() != null) {
-            user.setFirstName(request.getFirstName());
-        }
-        if (request.getLastName() != null) {
-            user.setLastName(request.getLastName());
-        }
-        if (request.getEmail() != null) {
-            user.setEmail(request.getEmail());
-        }
-        if (request.getPhone() != null) {
-            user.setPhone(request.getPhone());
-        }
-        if (request.getDni() != null) {
-            user.setDni(request.getDni());
-        }
-        if (request.getImageURL() != null) {
-            user.setImageURL(request.getImageURL());
-        }
-        if (request.getRole() != null) {
-            user.setRole(request.getRole());
-        }
-        if (request.getDepartment() != null) {
-            user.setDepartment(request.getDepartment());
-        }
-        if (request.getJobTitle() != null) {
-            user.setJobTitle(request.getJobTitle());
-        }
-        if (request.getBaseSalary() != null) {
-            user.setBaseSalary(request.getBaseSalary());
-        }
-        if (request.getEnabled() != null) {
-            user.setEnabled(request.getEnabled());
-        }
-        if (request.getAccountNonLocked() != null) {
-            user.setAccountNonLocked(request.getAccountNonLocked());
-        }
-        if (request.getPassword() != null && !request.getPassword().isBlank()) {
-            user.setPassword(request.getPassword());
-        }
-        user.setUpdatedAt(LocalDateTime.now().toString());
+        applyBasicChanges(user, request);
+        applyWorkChanges(user, request);
+        applyAccessChanges(user, request);
 
-        return toDto(userRepository.save(user));
+        saveUser(user);
+        return toDto(user);
     }
 
     /**
-     * Convierte la entidad en DTO y adjunta calendarios y solicitudes.
+     * Convierte la entidad de usuario a DTO completo.
      */
     private UserDto toDto(UserDocument document) {
-        List<LeaveRequestDto> leaveRequests = leaveRequestRepository.findByUserId(document.getId()).stream()
-                .map(this::toLeaveRequestDto)
-                .collect(Collectors.toList());
+        List<LeaveRequestDto> leaveRequests = new ArrayList<>();
+        for (LeaveRequestDocument request : leaveRequestRepository.findByUserId(document.getId())) {
+            leaveRequests.add(toLeaveRequestDto(request));
+        }
 
-        List<CalendarEventDto> calendarEvents = Optional.ofNullable(document.getCalendarEvents())
-                .orElse(Collections.emptyList())
-                .stream()
-                .map(this::toCalendarEvent)
-                .collect(Collectors.toList());
+        List<CalendarEventDto> calendarEvents = new ArrayList<>();
+        for (CalendarEventDocument event : getCalendarEventsOrEmpty(document)) {
+            calendarEvents.add(toCalendarEvent(event));
+        }
 
         UserDto dto = UserDto.builder()
                 .id(document.getId())
                 .firstName(document.getFirstName())
                 .lastName(document.getLastName())
-                .imageURL(document.getImageURL()) // Added imageURL
+                .imageURL(document.getImageURL())
                 .email(document.getEmail())
                 .phone(document.getPhone())
                 .dni(document.getDni())
@@ -282,9 +226,9 @@ public class UserService {
     }
 
     /**
-     * Convierte solicitudes de ausencia a DTO.
+     * Convierte una solicitud de ausencia a DTO.
      */
-    private LeaveRequestDto toLeaveRequestDto(com.joseluu.hospital.entity.LeaveRequestDocument document) {
+    private LeaveRequestDto toLeaveRequestDto(LeaveRequestDocument document) {
         return LeaveRequestDto.builder()
                 .id(document.getId())
                 .userId(document.getUserId())
@@ -302,7 +246,7 @@ public class UserService {
     }
 
     /**
-     * Convierte eventos de calendario a DTO.
+     * Convierte un evento de calendario a DTO.
      */
     private CalendarEventDto toCalendarEvent(CalendarEventDocument document) {
         return CalendarEventDto.builder()
@@ -313,5 +257,153 @@ public class UserService {
                 .endTime(document.getEndTime())
                 .notes(document.getNotes())
                 .build();
+    }
+
+    /**
+     * Busca un usuario o lanza error.
+     */
+    private UserDocument requireUser(String userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+    }
+
+    /**
+     * Busca un hospital o lanza error.
+     */
+    private HospitalDocument requireHospital(String hospitalId) {
+        return hospitalRepository.findById(hospitalId)
+                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
+    }
+
+    /**
+     * Devuelve los eventos del usuario o una lista vacia.
+     */
+    private List<CalendarEventDocument> getCalendarEventsOrEmpty(UserDocument user) {
+        if (user.getCalendarEvents() == null) {
+            return new ArrayList<>();
+        }
+        return user.getCalendarEvents();
+    }
+
+    /**
+     * Devuelve la lista de eventos y la crea si no existe.
+     */
+    private List<CalendarEventDocument> getOrCreateCalendarEvents(UserDocument user) {
+        if (user.getCalendarEvents() == null) {
+            user.setCalendarEvents(new ArrayList<>());
+        }
+        return user.getCalendarEvents();
+    }
+
+    /**
+     * Busca un evento concreto dentro del usuario.
+     */
+    private CalendarEventDocument requireCalendarEvent(UserDocument user, String eventId) {
+        for (CalendarEventDocument event : getCalendarEventsOrEmpty(user)) {
+            if (eventId.equals(event.getId())) {
+                return event;
+            }
+        }
+        throw new NotFoundException("Evento de calendario no encontrado");
+    }
+
+    /**
+     * Indica si el evento pertenece al mes solicitado.
+     */
+    private boolean matchesMonth(CalendarEventDocument event, String month) {
+        String date = event.getDate();
+        return date != null && date.startsWith(month);
+    }
+
+    /**
+     * Aplica un departamento por defecto a administradores de hospital.
+     */
+    private String resolveDepartment(UserRole role, String department) {
+        if (role == UserRole.HOSPITAL_ADMIN && isBlank(department)) {
+            return "Administracion";
+        }
+        return department;
+    }
+
+    /**
+     * Aplica un cargo por defecto a administradores de hospital.
+     */
+    private String resolveJobTitle(UserRole role, String jobTitle) {
+        if (role == UserRole.HOSPITAL_ADMIN && isBlank(jobTitle)) {
+            return "Administrador del hospital";
+        }
+        return jobTitle;
+    }
+
+    /**
+     * Actualiza los datos personales basicos.
+     */
+    private void applyBasicChanges(UserDocument user, UpdateUserRequestDto request) {
+        if (request.getFirstName() != null) {
+            user.setFirstName(request.getFirstName());
+        }
+        if (request.getLastName() != null) {
+            user.setLastName(request.getLastName());
+        }
+        if (request.getEmail() != null) {
+            user.setEmail(request.getEmail());
+        }
+        if (request.getPhone() != null) {
+            user.setPhone(request.getPhone());
+        }
+        if (request.getDni() != null) {
+            user.setDni(request.getDni());
+        }
+        if (request.getImageURL() != null) {
+            user.setImageURL(request.getImageURL());
+        }
+    }
+
+    /**
+     * Actualiza los datos laborales del usuario.
+     */
+    private void applyWorkChanges(UserDocument user, UpdateUserRequestDto request) {
+        if (request.getRole() != null) {
+            user.setRole(request.getRole());
+        }
+        if (request.getDepartment() != null) {
+            user.setDepartment(request.getDepartment());
+        }
+        if (request.getJobTitle() != null) {
+            user.setJobTitle(request.getJobTitle());
+        }
+        if (request.getBaseSalary() != null) {
+            user.setBaseSalary(request.getBaseSalary());
+        }
+    }
+
+    /**
+     * Actualiza datos de acceso y estado de la cuenta.
+     */
+    private void applyAccessChanges(UserDocument user, UpdateUserRequestDto request) {
+        if (request.getEnabled() != null) {
+            user.setEnabled(request.getEnabled());
+        }
+        if (request.getAccountNonLocked() != null) {
+            user.setAccountNonLocked(request.getAccountNonLocked());
+        }
+        if (!isBlank(request.getPassword())) {
+            user.setPassword(request.getPassword());
+        }
+    }
+
+    /**
+     * Guarda el usuario actualizando la fecha de modificacion.
+     */
+    private void saveUser(UserDocument user) {
+        user.setUpdatedAt(LocalDateTime.now().toString());
+        userRepository.save(user);
+    }
+
+    /**
+     * Comprueba si un texto es nulo o vacio.
+     */
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

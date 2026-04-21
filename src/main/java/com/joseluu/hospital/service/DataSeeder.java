@@ -99,7 +99,6 @@ public class DataSeeder implements ApplicationRunner {
 
     /**
      * Recupera ids existentes para evitar duplicados al sembrar.
-     * Metodo facilitado por la IA
      */
     private void hydrateExistingReferences() {
         hospitalRepository.findAll().stream().findFirst().ifPresent(hospital -> hospitalId = hospital.getId());
@@ -123,7 +122,6 @@ public class DataSeeder implements ApplicationRunner {
 
     /**
      * Convierte chats antiguos a tipo SOPORTE cuando corresponda.
-     * Metodo facilitado por la IA
      */
     private void migrateLegacySupportChats() {
         chatRepository.findAll().forEach(chat -> {
@@ -198,7 +196,7 @@ public class DataSeeder implements ApplicationRunner {
                 .id(rootRefId)
                 .firstName("Carlos")
                 .lastName("Rodriguez")
-                .imageURL("@/media/averonixlogo.png")
+                .imageURL("/averonixlogo.png")
                 .email("superadmin@trassierra.com")
                 .dni("12345678A")
                 .role(UserRole.ROOT)

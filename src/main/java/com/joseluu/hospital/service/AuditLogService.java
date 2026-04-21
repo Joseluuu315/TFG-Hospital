@@ -6,10 +6,13 @@ import com.joseluu.hospital.repository.AuditLogRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
+/**
+ * Servicio encargado del registro de acciones importantes del sistema.
+ */
 @Service
 public class AuditLogService {
     private final AuditLogRepository auditLogRepository;
@@ -18,8 +21,16 @@ public class AuditLogService {
         this.auditLogRepository = auditLogRepository;
     }
 
-    public void log(String hospitalId, String actorUserId, String action, String entityType, String entityId, String details) {
-        auditLogRepository.save(AuditLogDocument.builder()
+    /**
+     * Guarda una entrada de auditoria.
+     */
+    public void log(String hospitalId,
+                    String actorUserId,
+                    String action,
+                    String entityType,
+                    String entityId,
+                    String details) {
+        AuditLogDocument document = AuditLogDocument.builder()
                 .id(UUID.randomUUID().toString())
                 .hospitalId(hospitalId)
                 .actorUserId(actorUserId)
@@ -28,21 +39,35 @@ public class AuditLogService {
                 .entityId(entityId)
                 .details(details)
                 .createdAt(LocalDateTime.now().toString())
-                .build());
+                .build();
+
+        auditLogRepository.save(document);
     }
 
+    /**
+     * Devuelve el historico de auditoria de un hospital.
+     */
     public List<AuditLogDto> getByHospital(String hospitalId) {
-        return auditLogRepository.findByHospitalIdOrderByCreatedAtDesc(hospitalId).stream()
-                .map(document -> AuditLogDto.builder()
-                        .id(document.getId())
-                        .hospitalId(document.getHospitalId())
-                        .actorUserId(document.getActorUserId())
-                        .action(document.getAction())
-                        .entityType(document.getEntityType())
-                        .entityId(document.getEntityId())
-                        .details(document.getDetails())
-                        .createdAt(document.getCreatedAt())
-                        .build())
-                .collect(Collectors.toList());
+        List<AuditLogDto> logs = new ArrayList<>();
+        for (AuditLogDocument document : auditLogRepository.findByHospitalIdOrderByCreatedAtDesc(hospitalId)) {
+            logs.add(toDto(document));
+        }
+        return logs;
+    }
+
+    /**
+     * Convierte la entidad a DTO.
+     */
+    private AuditLogDto toDto(AuditLogDocument document) {
+        return AuditLogDto.builder()
+                .id(document.getId())
+                .hospitalId(document.getHospitalId())
+                .actorUserId(document.getActorUserId())
+                .action(document.getAction())
+                .entityType(document.getEntityType())
+                .entityId(document.getEntityId())
+                .details(document.getDetails())
+                .createdAt(document.getCreatedAt())
+                .build();
     }
 }

@@ -33,6 +33,9 @@ public class UserDto {
     private String createdAt;
     private String updatedAt;
 
+    /**
+     * Mantiene sincronizados los nombres en ingles y en castellano.
+     */
     public void syncNames() {
         if (firstName != null) {
             this.nombre = firstName;

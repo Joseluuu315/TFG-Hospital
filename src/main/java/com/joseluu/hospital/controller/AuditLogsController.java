@@ -6,6 +6,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * Endpoints para consultar el registro de auditoria de cada hospital.
+ */
 @RestController
 public class AuditLogsController {
     private final AuditLogService auditLogService;
@@ -14,6 +17,9 @@ public class AuditLogsController {
         this.auditLogService = auditLogService;
     }
 
+    /**
+     * Lista las entradas de auditoria de un hospital.
+     */
     @GetMapping("/api/hospitals/{hospitalId}/audit-logs")
     public List<AuditLogDto> getByHospital(@PathVariable String hospitalId) {
         return auditLogService.getByHospital(hospitalId);

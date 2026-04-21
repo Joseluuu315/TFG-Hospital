@@ -15,17 +15,17 @@ import com.joseluu.hospital.repository.UserRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
- * Orquesta la lógica de negocio para chats y mensajes persistidos en MongoDB.
+ * Servicio encargado de chats y mensajes persistidos en MongoDB.
  */
 @Service
 public class ChatService {
@@ -45,107 +45,90 @@ public class ChatService {
     }
 
     /**
-     * Devuelve los chats del usuario ordenados por el último mensaje.
+     * Devuelve los chats del usuario ordenados por fecha del ultimo mensaje.
      */
     public List<ChatDto> getChatsForUser(String userId) {
-        return chatRepository.findByParticipantsContaining(userId).stream()
-                .map(chat -> toDto(chat, userId))
-                .sorted(Comparator.comparing(ChatDto::getLastMessageTime, Comparator.nullsLast(Comparator.reverseOrder())))
-                .collect(Collectors.toList());
+        List<ChatDto> chats = new ArrayList<>();
+        for (ChatDocument chat : chatRepository.findByParticipantsContaining(userId)) {
+            chats.add(toDto(chat, userId));
+        }
+        chats.sort(Comparator.comparing(ChatDto::getLastMessageTime, Comparator.nullsLast(Comparator.reverseOrder())));
+        return chats;
     }
 
     /**
-     * Obtiene los mensajes de un chat en orden cronológico.
+     * Obtiene los mensajes de un chat en orden cronologico.
      */
     public List<ChatMessageDto> getMessages(String chatId) {
-        return chatMessageRepository.findByChatIdOrderByTimestampAsc(chatId).stream()
-                .map(this::toMessageDto)
-                .collect(Collectors.toList());
+        List<ChatMessageDto> messages = new ArrayList<>();
+        for (ChatMessageDocument message : chatMessageRepository.findByChatIdOrderByTimestampAsc(chatId)) {
+            messages.add(toMessageDto(message));
+        }
+        return messages;
     }
 
     /**
-     * Persiste un nuevo mensaje, actualiza el último mensaje y recalcula los contadores de lectura.
+     * Guarda un mensaje, actualiza el chat y recalcula no leidos.
      */
     public ChatMessageDto sendMessage(String chatId, String senderId, String senderName, String content) {
         if (content == null || content.isBlank()) {
             throw new BadRequestException("El contenido del mensaje es obligatorio");
         }
-        ChatDocument chat = chatRepository.findById(chatId)
-                .orElseThrow(() -> new NotFoundException("Chat no encontrado"));
 
-        // Obtener la imagen del remitente
-        String senderImageURL = userRepository.findById(senderId)
-                .map(UserDocument::getImageURL)
-                .orElse(null);
-
+        ChatDocument chat = requireChat(chatId);
         String timestamp = LocalDateTime.now().toString();
+        String senderImageURL = findSenderImage(senderId);
+
         ChatMessageDocument message = ChatMessageDocument.builder()
                 .id(UUID.randomUUID().toString())
                 .chatId(chatId)
                 .senderId(senderId)
                 .senderName(senderName)
-                .senderImageURL(senderImageURL)   // ← añadido
+                .senderImageURL(senderImageURL)
                 .content(content)
                 .timestamp(timestamp)
                 .read(true)
                 .build();
 
-        chat.setLastMessage(content);
-        chat.setLastMessageTime(timestamp);
-        Map<String, Integer> counts = Optional.ofNullable(chat.getUnreadCounts()).orElse(new HashMap<>());
-        chat.getParticipants().stream()
-                .filter(participant -> !participant.equals(senderId))
-                .forEach(participant -> {
-                    counts.put(participant, counts.getOrDefault(participant, 0) + 1);
-                    notificationService.createNotification(participant, NotificationType.NEW_CHAT_MESSAGE, "Nuevo mensaje en " + chat.getName());
-                });
-        counts.put(senderId, 0);
-        chat.setUnreadCounts(counts);
-        chat.setUpdatedAt(timestamp);
-        chatRepository.save(chat);
-
+        updateChatAfterMessage(chat, senderId, content, timestamp);
         return toMessageDto(chatMessageRepository.save(message));
     }
 
     /**
-     * Crea (o reutiliza) un chat privado entre dos usuarios.
+     * Crea o reutiliza un chat privado entre dos usuarios.
      */
     public ChatDto createPrivateChat(String currentUserId, String otherUserId) {
         if (otherUserId == null || otherUserId.isBlank()) {
             throw new BadRequestException("El userId es obligatorio");
         }
+
         List<UserDocument> users = userRepository.findAllById(List.of(currentUserId, otherUserId));
         if (users.size() < 2) {
             throw new NotFoundException("No se encontraron ambos usuarios");
         }
 
-        Optional<ChatDocument> existing = chatRepository.findAll().stream()
-                .filter(chat -> chat.getType() == ChatType.PRIVATE)
-                .filter(chat -> chat.getParticipants().contains(currentUserId) && chat.getParticipants().contains(otherUserId))
-                .findFirst();
-
-        if (existing.isPresent()) {
-            return toDto(existing.get(), currentUserId);
+        ChatDocument existing = findPrivateChat(currentUserId, otherUserId);
+        if (existing != null) {
+            return toDto(existing, currentUserId);
         }
 
-        UserDocument currentUser = users.stream().filter(u -> u.getId().equals(currentUserId)).findFirst().orElseThrow();
-        UserDocument otherUser = users.stream().filter(u -> u.getId().equals(otherUserId)).findFirst().orElseThrow();
+        UserDocument currentUser = findUser(users, currentUserId);
+        UserDocument otherUser = findUser(users, otherUserId);
 
         ChatDocument chat = ChatDocument.builder()
                 .id(UUID.randomUUID().toString())
                 .type(ChatType.PRIVATE)
                 .name(otherUser.getFirstName() + " " + otherUser.getLastName())
                 .participants(List.of(currentUserId, otherUserId))
-                .participantNames(List.of(currentUser.getFirstName(), otherUser.getLastName()))
+                .participantNames(List.of(fullName(currentUser), fullName(otherUser)))
                 .createdBy(currentUserId)
                 .hospitalId(currentUser.getHospitalId())
-                .unreadCounts(new HashMap<>())
+                .unreadCounts(buildUnreadMap(List.of(currentUserId, otherUserId)))
                 .createdAt(LocalDateTime.now().toString())
                 .updatedAt(LocalDateTime.now().toString())
                 .build();
 
-        chatRepository.save(chat);
-        return toDto(chat, currentUserId);
+        return toDto(chatRepository.save(chat), currentUserId);
     }
 
     /**
@@ -162,23 +145,12 @@ public class ChatService {
         if (memberIds == null || memberIds.isEmpty()) {
             throw new BadRequestException("Los participantes son obligatorios");
         }
-        List<String> participantIds = new java.util.ArrayList<>(new LinkedHashSet<>(memberIds));
-        if (!participantIds.contains(currentUserId)) {
-            participantIds.add(0, currentUserId);
-        }
 
+        List<String> participantIds = normalizeParticipants(currentUserId, memberIds);
         List<UserDocument> users = userRepository.findAllById(participantIds);
         if (users.isEmpty()) {
             throw new NotFoundException("No se encontraron miembros para el grupo");
         }
-
-        List<String> participantNames = participantIds.stream()
-                .map(userId -> users.stream()
-                        .filter(user -> user.getId().equals(userId))
-                        .findFirst()
-                        .map(user -> user.getFirstName() + " " + user.getLastName())
-                        .orElse("Usuario"))
-                .collect(Collectors.toList());
 
         ChatDocument chat = ChatDocument.builder()
                 .id(UUID.randomUUID().toString())
@@ -186,7 +158,7 @@ public class ChatService {
                 .name(name)
                 .description(description)
                 .participants(participantIds)
-                .participantNames(participantNames)
+                .participantNames(buildParticipantNames(participantIds, users))
                 .createdBy(currentUserId)
                 .hospitalId(hospitalId)
                 .unreadCounts(buildUnreadMap(participantIds))
@@ -198,28 +170,22 @@ public class ChatService {
     }
 
     /**
-     * Actualiza la lista de participantes y los contadores de lectura de un chat de grupo.
+     * Actualiza participantes y contadores de lectura en un grupo.
      */
     public void updateGroupParticipants(String chatId, List<String> participantIds) {
-        ChatDocument chat = chatRepository.findById(chatId)
-                .orElseThrow(() -> new NotFoundException("Chat no encontrado"));
-
+        ChatDocument chat = requireChat(chatId);
         List<UserDocument> users = userRepository.findAllById(participantIds);
+
         chat.setParticipants(participantIds);
-        chat.setParticipantNames(participantIds.stream()
-                .map(userId -> users.stream()
-                        .filter(user -> user.getId().equals(userId))
-                        .findFirst()
-                        .map(user -> user.getFirstName() + " " + user.getLastName())
-                        .orElse("Usuario"))
-                .collect(Collectors.toList()));
+        chat.setParticipantNames(buildParticipantNames(participantIds, users));
         chat.setUnreadCounts(buildUnreadMap(participantIds));
         chat.setUpdatedAt(LocalDateTime.now().toString());
+
         chatRepository.save(chat);
     }
 
     /**
-     * Elimina un chat y sus mensajes asociados.
+     * Elimina un chat y todos sus mensajes.
      */
     public void deleteChat(String chatId) {
         chatMessageRepository.deleteByChatId(chatId);
@@ -227,35 +193,160 @@ public class ChatService {
     }
 
     /**
-     * Marca todos los mensajes como leídos para un usuario concreto.
+     * Marca como leido el chat para un usuario concreto.
      */
     public void markAsRead(String chatId, String userId) {
         chatRepository.findById(chatId).ifPresent(chat -> {
-            Map<String, Integer> counts = Optional.ofNullable(chat.getUnreadCounts()).orElse(new HashMap<>());
+            Map<String, Integer> counts = chat.getUnreadCounts() == null
+                    ? new HashMap<>()
+                    : new HashMap<>(chat.getUnreadCounts());
             counts.put(userId, 0);
             chat.setUnreadCounts(counts);
             chatRepository.save(chat);
 
-            chatMessageRepository.findByChatIdOrderByTimestampAsc(chatId).forEach(message -> {
+            for (ChatMessageDocument message : chatMessageRepository.findByChatIdOrderByTimestampAsc(chatId)) {
                 if (!message.isRead()) {
                     message.setRead(true);
                     chatMessageRepository.save(message);
                 }
-            });
+            }
         });
     }
 
     /**
-     * Inicializa el mapa de contadores de mensajes no leídos para un chat nuevo.
+     * Busca la imagen del remitente.
+     */
+    private String findSenderImage(String senderId) {
+        return userRepository.findById(senderId)
+                .map(UserDocument::getImageURL)
+                .orElse(null);
+    }
+
+    /**
+     * Aplica los cambios del chat tras enviar un mensaje.
+     */
+    private void updateChatAfterMessage(ChatDocument chat, String senderId, String content, String timestamp) {
+        chat.setLastMessage(content);
+        chat.setLastMessageTime(timestamp);
+        chat.setUnreadCounts(updateUnreadCounts(chat, senderId));
+        chat.setUpdatedAt(timestamp);
+        chatRepository.save(chat);
+    }
+
+    /**
+     * Recalcula los no leidos y lanza notificaciones.
+     */
+    private Map<String, Integer> updateUnreadCounts(ChatDocument chat, String senderId) {
+        Map<String, Integer> counts = chat.getUnreadCounts() == null
+                ? new HashMap<>()
+                : new HashMap<>(chat.getUnreadCounts());
+
+        for (String participant : chat.getParticipants()) {
+            if (participant.equals(senderId)) {
+                counts.put(participant, 0);
+                continue;
+            }
+
+            counts.put(participant, counts.getOrDefault(participant, 0) + 1);
+            notificationService.createNotification(
+                    participant,
+                    NotificationType.NEW_CHAT_MESSAGE,
+                    "Nuevo mensaje en " + chat.getName()
+            );
+        }
+
+        return counts;
+    }
+
+    /**
+     * Busca un chat privado existente entre dos usuarios.
+     */
+    private ChatDocument findPrivateChat(String currentUserId, String otherUserId) {
+        for (ChatDocument chat : chatRepository.findAll()) {
+            boolean isPrivate = chat.getType() == ChatType.PRIVATE;
+            boolean hasBothUsers = chat.getParticipants().contains(currentUserId)
+                    && chat.getParticipants().contains(otherUserId);
+            if (isPrivate && hasBothUsers) {
+                return chat;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Garantiza una lista de participantes sin duplicados.
+     */
+    private List<String> normalizeParticipants(String currentUserId, List<String> memberIds) {
+        List<String> participantIds = new ArrayList<>(new LinkedHashSet<>(memberIds));
+        if (!participantIds.contains(currentUserId)) {
+            participantIds.add(0, currentUserId);
+        }
+        return participantIds;
+    }
+
+    /**
+     * Construye los nombres visibles de los participantes.
+     */
+    private List<String> buildParticipantNames(List<String> participantIds, List<UserDocument> users) {
+        List<String> names = new ArrayList<>();
+        for (String userId : participantIds) {
+            UserDocument user = findOptionalUser(users, userId);
+            names.add(user != null ? fullName(user) : "Usuario");
+        }
+        return names;
+    }
+
+    /**
+     * Crea el mapa de no leidos inicial.
      */
     private Map<String, Integer> buildUnreadMap(List<String> participantIds) {
         Map<String, Integer> unread = new HashMap<>();
-        participantIds.forEach(id -> unread.put(id, 0));
+        for (String participantId : participantIds) {
+            unread.put(participantId, 0);
+        }
         return unread;
     }
 
     /**
-     * Convierte la entidad persistida a un DTO enriquecido con el contador de no leídos.
+     * Obtiene un chat o lanza error.
+     */
+    private ChatDocument requireChat(String chatId) {
+        return chatRepository.findById(chatId)
+                .orElseThrow(() -> new NotFoundException("Chat no encontrado"));
+    }
+
+    /**
+     * Busca un usuario dentro de una lista y obliga a que exista.
+     */
+    private UserDocument findUser(List<UserDocument> users, String userId) {
+        UserDocument user = findOptionalUser(users, userId);
+        if (user == null) {
+            throw new NotFoundException("Usuario no encontrado");
+        }
+        return user;
+    }
+
+    /**
+     * Busca un usuario dentro de una lista sin lanzar error.
+     */
+    private UserDocument findOptionalUser(List<UserDocument> users, String userId) {
+        for (UserDocument user : users) {
+            if (user.getId().equals(userId)) {
+                return user;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Devuelve el nombre completo de un usuario.
+     */
+    private String fullName(UserDocument user) {
+        return user.getFirstName() + " " + user.getLastName();
+    }
+
+    /**
+     * Convierte el chat a DTO teniendo en cuenta los no leidos del usuario.
      */
     private ChatDto toDto(ChatDocument chat, String userId) {
         int unread = Optional.ofNullable(chat.getUnreadCounts())
@@ -278,7 +369,7 @@ public class ChatService {
     }
 
     /**
-     * Convierte un documento de mensaje en DTO.
+     * Convierte un mensaje a DTO.
      */
     private ChatMessageDto toMessageDto(ChatMessageDocument document) {
         return ChatMessageDto.builder()
@@ -286,7 +377,7 @@ public class ChatService {
                 .chatId(document.getChatId())
                 .senderId(document.getSenderId())
                 .senderName(document.getSenderName())
-                .senderImageURL(document.getSenderImageURL())  // ← añadido
+                .senderImageURL(document.getSenderImageURL())
                 .content(document.getContent())
                 .timestamp(document.getTimestamp())
                 .read(document.isRead())

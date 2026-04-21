@@ -18,7 +18,9 @@ import com.joseluu.hospital.repository.ShiftAssignmentRepository;
 import com.joseluu.hospital.repository.ShiftRequirementRepository;
 import com.joseluu.hospital.repository.ShiftTypeRepository;
 import com.joseluu.hospital.repository.UserRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -29,8 +31,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
+/**
+ * Servicio encargado de las demandas de turno y de las asignaciones manuales o automaticas.
+ */
 @Service
 public class SchedulingService {
     private final ShiftRequirementRepository shiftRequirementRepository;
@@ -60,361 +64,576 @@ public class SchedulingService {
         this.auditLogService = auditLogService;
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Requisitos de turnos
-    // ──────────────────────────────────────────────────────────────────────────
-
+    /**
+     * Crea una demanda de turno para un hospital.
+     */
     public ShiftRequirementDto createRequirement(String hospitalId, ShiftRequirementDto dto) {
-        ShiftRequirementDocument saved = shiftRequirementRepository.save(
-                ShiftRequirementDocument.builder()
-                        .id(UUID.randomUUID().toString())
-                        .hospitalId(hospitalId)
-                        .department(dto.getDepartment())
-                        .date(dto.getDate())
-                        .shiftTypeCode(dto.getShiftTypeCode())
-                        .requiredWorkers(dto.getRequiredWorkers())
-                        .build());
-        return ShiftRequirementDto.builder()
-                .id(saved.getId())
-                .date(saved.getDate())
-                .department(saved.getDepartment())
-                .shiftTypeCode(saved.getShiftTypeCode())
-                .requiredWorkers(saved.getRequiredWorkers())
+        ShiftRequirementDocument document = ShiftRequirementDocument.builder()
+                .id(UUID.randomUUID().toString())
+                .hospitalId(hospitalId)
+                .department(dto.getDepartment())
+                .date(dto.getDate())
+                .shiftTypeCode(dto.getShiftTypeCode())
+                .requiredWorkers(dto.getRequiredWorkers())
                 .build();
+
+        return toRequirementDto(shiftRequirementRepository.save(document));
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Autoasignación
-    // ──────────────────────────────────────────────────────────────────────────
-
-    public List<ShiftAssignmentDto> autoAssign(String hospitalId, String actorUserId,
-                                               String startDate, String endDate) {
+    /**
+     * Ejecuta la autoasignacion de turnos en un rango de fechas.
+     */
+    public List<ShiftAssignmentDto> autoAssign(String hospitalId,
+                                               String actorUserId,
+                                               String startDate,
+                                               String endDate) {
         HospitalSettingsDto settings = hospitalSettingsService.getByHospital(hospitalId);
-
-        List<ShiftRequirementDocument> requirements = shiftRequirementRepository
-                .findInDateRange(hospitalId, startDate, endDate);
-
-        if (requirements.isEmpty()) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.BAD_REQUEST,
-                    "No hay demandas de turno registradas entre " + startDate + " y " + endDate
-                    + ". Crea al menos una demanda antes de lanzar la autoasignación.");
-        }
-
-        List<UserDocument> workers = userRepository.findByHospitalIdAndRole(hospitalId, UserRole.WORKER);
-        if (workers.isEmpty()) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.BAD_REQUEST,
-                    "No hay trabajadores activos en el hospital.");
-        }
-
-        // Versión = max versión existente + 1 (filtrado por hospital)
-        int version = shiftAssignmentRepository.findByHospitalId(hospitalId).stream()
-                .map(ShiftAssignmentDocument::getVersion)
-                .max(Integer::compareTo)
-                .orElse(0) + 1;
-
+        List<ShiftRequirementDocument> requirements = getSortedRequirements(hospitalId, startDate, endDate);
+        List<UserDocument> workers = getWorkersForHospital(hospitalId);
+        int version = getNextAssignmentVersion(hospitalId);
         List<ShiftAssignmentDto> assignments = new ArrayList<>();
 
-        for (ShiftRequirementDocument requirement : requirements.stream()
-                .sorted(Comparator.comparing(ShiftRequirementDocument::getDate)
-                        .thenComparing(ShiftRequirementDocument::getShiftTypeCode))
-                .toList()) {
-
-            ShiftTypeDocument shiftType = shiftTypeRepository
-                    .findByHospitalIdAndCode(hospitalId, requirement.getShiftTypeCode())
-                    .orElseThrow(() -> new NotFoundException(
-                            "Tipo de turno no encontrado: " + requirement.getShiftTypeCode()));
-
-            // Base: Cualquier trabajador sin overlap en ese momento
-            List<UserDocument> baseCandidates = workers.stream()
-                    .filter(w -> !hasOverlap(w.getId(), requirement.getDate(), shiftType))
-                    .collect(Collectors.toList());
-
-            // Filtros ideales
-            java.util.function.Predicate<UserDocument> isIdeal = w ->
-                    w.isEnabled() &&
-                    w.getDepartment() != null && requirement.getDepartment().equalsIgnoreCase(w.getDepartment()) &&
-                    !isOnApprovedLeave(w.getId(), requirement.getDate());
-
-            // Pass 1: Estricto (Respeta TODO: ideal + descanso + horas semanales)
-            List<UserDocument> candidates = baseCandidates.stream()
-                    .filter(isIdeal)
-                    .filter(w -> respectsRest(w.getId(), requirement.getDate(), shiftType, settings.getMinRestHours()))
-                    .filter(w -> respectsWeeklyHours(w.getId(), requirement.getDate(), shiftType, settings.getMaxWeeklyHours()))
-                    .sorted(Comparator.comparingDouble(w -> calculateScore(w.getId(), requirement.getDate(), shiftType)))
-                    .collect(Collectors.toList());
-
-            // Pass 2: Relajado (Ignora horas máximas semanales si hace falta)
-            if (candidates.size() < requirement.getRequiredWorkers()) {
-                List<UserDocument> extra = baseCandidates.stream()
-                        .filter(w -> !candidates.contains(w))
-                        .filter(isIdeal)
-                        .filter(w -> respectsRest(w.getId(), requirement.getDate(), shiftType, settings.getMinRestHours()))
-                        .sorted(Comparator.comparingDouble(w -> calculateScore(w.getId(), requirement.getDate(), shiftType)))
-                        .collect(Collectors.toList());
-                candidates.addAll(extra);
-            }
-
-            // Pass 3: Menos estricto (Ignora descansos mínimos y horas)
-            if (candidates.size() < requirement.getRequiredWorkers()) {
-                 List<UserDocument> extra = baseCandidates.stream()
-                        .filter(w -> !candidates.contains(w))
-                        .filter(isIdeal)
-                        .sorted(Comparator.comparingDouble(w -> calculateScore(w.getId(), requirement.getDate(), shiftType)))
-                        .collect(Collectors.toList());
-                candidates.addAll(extra);
-            }
-
-            // Pass 4: Totalmente automático a la fuerza (Cualquier trabajador libre, sea del departamento o no)
-            if (candidates.size() < requirement.getRequiredWorkers()) {
-                 List<UserDocument> extra = baseCandidates.stream()
-                        .filter(w -> !candidates.contains(w))
-                        .sorted(Comparator.comparingDouble(w -> calculateScore(w.getId(), requirement.getDate(), shiftType)))
-                        .collect(Collectors.toList());
-                candidates.addAll(extra);
-            }
-
-            int covered = 0;
-            for (UserDocument candidate : candidates) {
-                if (covered >= requirement.getRequiredWorkers()) break;
-                ShiftAssignmentDocument saved = shiftAssignmentRepository.save(
-                        buildAssignment(hospitalId, candidate, requirement, shiftType, version));
-                assignments.add(toDto(saved));
-                covered++;
-                notificationService.createNotification(candidate.getId(),
-                        NotificationType.SHIFT_ASSIGNED,
-                        "Nuevo turno asignado para " + requirement.getDate()
-                        + " (" + requirement.getShiftTypeCode() + ")");
-            }
+        for (ShiftRequirementDocument requirement : requirements) {
+            ShiftTypeDocument shiftType = requireShiftType(hospitalId, requirement.getShiftTypeCode());
+            List<UserDocument> candidates = buildCandidates(requirement, shiftType, workers, settings);
+            int covered = assignRequirement(hospitalId, requirement, shiftType, version, candidates, assignments);
 
             if (covered < requirement.getRequiredWorkers()) {
-                final int finalCovered = covered;
-                final int required = requirement.getRequiredWorkers();
-                final String dept = requirement.getDepartment();
-                final String reqDate = requirement.getDate();
-                userRepository.findByHospitalIdAndRole(hospitalId, UserRole.HOSPITAL_ADMIN)
-                        .forEach(admin -> notificationService.createNotification(
-                                admin.getId(), NotificationType.SHIFT_UNCOVERED,
-                                "Cobertura incompleta en " + dept
-                                + " para " + reqDate
-                                + " (" + finalCovered + "/" + required + ")"));
+                notifyUncoveredRequirement(hospitalId, requirement, covered);
             }
         }
 
-        auditLogService.log(hospitalId, actorUserId, "SHIFT_AUTO_ASSIGNED", "shift_assignments",
-                hospitalId, "Asignacion automatica entre " + startDate + " y " + endDate);
+        auditLogService.log(
+                hospitalId,
+                actorUserId,
+                "SHIFT_AUTO_ASSIGNED",
+                "shift_assignments",
+                hospitalId,
+                "Asignacion automatica entre " + startDate + " y " + endDate
+        );
 
         if (assignments.isEmpty()) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.BAD_REQUEST,
-                    "Asignados 0 turnos. Ningún trabajador cumple los requisitos para las demandas registradas (revisa que haya trabajadores libres y habilitados del mismo departamento que la demanda).");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Asignados 0 turnos. Ningun trabajador cumple los requisitos para las demandas registradas."
+            );
         }
 
         return assignments;
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Asignación manual
-    // ──────────────────────────────────────────────────────────────────────────
-
-    public ShiftAssignmentDto manualAssign(String hospitalId, String actorUserId,
-                                           ManualShiftRequestDto dto) {
+    /**
+     * Crea una asignacion manual para un trabajador.
+     */
+    public ShiftAssignmentDto manualAssign(String hospitalId, String actorUserId, ManualShiftRequestDto dto) {
         UserDocument worker = userRepository.findById(dto.getWorkerId())
                 .orElseThrow(() -> new NotFoundException("Trabajador no encontrado"));
 
-        LocalDateTime start;
-        LocalDateTime end;
-
-        if ("SHIFT".equalsIgnoreCase(dto.getType())) {
-            if (dto.getShiftTypeCode() == null || dto.getShiftTypeCode().isBlank()) {
-                throw new IllegalArgumentException(
-                        "El código de tipo de turno es obligatorio para asignaciones de tipo SHIFT.");
-            }
-            ShiftTypeDocument shiftType = shiftTypeRepository
-                    .findByHospitalIdAndCode(hospitalId, dto.getShiftTypeCode())
-                    .orElseThrow(() -> new NotFoundException(
-                            "Tipo de turno no encontrado: " + dto.getShiftTypeCode()));
-            start = combine(dto.getDate(), shiftType.getStartTime());
-            end   = combine(dto.getDate(), shiftType.getEndTime());
-            if (shiftType.isCrossesMidnight() || !end.isAfter(start)) {
-                end = end.plusDays(1);
-            }
-        } else {
-            // DAY_OFF / VACATION / HOLIDAY — sin horario
-            start = LocalDate.parse(dto.getDate()).atStartOfDay();
-            end   = start.plusDays(1);
-        }
-
+        ShiftDateRange range = buildManualRange(hospitalId, dto);
         LocalDateTime now = LocalDateTime.now();
-        ShiftAssignmentDocument saved = shiftAssignmentRepository.save(
-                ShiftAssignmentDocument.builder()
-                        .id(UUID.randomUUID().toString())
-                        .hospitalId(hospitalId)
-                        .workerId(worker.getId())
-                        .workerFullName(worker.getFirstName() + " " + worker.getLastName())
-                        .department(worker.getDepartment())
-                        .shiftTypeCode(dto.getType().equalsIgnoreCase("SHIFT")
-                                ? dto.getShiftTypeCode() : dto.getType())
-                        .startAt(start.toString())
-                        .endAt(end.toString())
-                        .status(ShiftAssignmentStatus.ASSIGNED)
-                        .source(ShiftAssignmentSource.MANUAL)
-                        .version(0)
-                        .createdAt(now.toString())
-                        .updatedAt(now.toString())
-                        .build());
 
-        notificationService.createNotification(worker.getId(), NotificationType.SHIFT_ASSIGNED,
-                "Turno asignado manualmente para " + dto.getDate() + " (" + dto.getType() + ")");
+        ShiftAssignmentDocument assignment = ShiftAssignmentDocument.builder()
+                .id(UUID.randomUUID().toString())
+                .hospitalId(hospitalId)
+                .workerId(worker.getId())
+                .workerFullName(worker.getFirstName() + " " + worker.getLastName())
+                .department(worker.getDepartment())
+                .shiftTypeCode(range.shiftTypeCode())
+                .startAt(range.start().toString())
+                .endAt(range.end().toString())
+                .status(ShiftAssignmentStatus.ASSIGNED)
+                .source(ShiftAssignmentSource.MANUAL)
+                .version(0)
+                .createdAt(now.toString())
+                .updatedAt(now.toString())
+                .build();
 
-        auditLogService.log(hospitalId, actorUserId, "SHIFT_MANUAL_ASSIGNED",
-                "shift_assignments", saved.getId(),
-                "Asignacion manual para " + worker.getFirstName() + " " + worker.getLastName()
-                + " en " + dto.getDate());
+        ShiftAssignmentDocument saved = shiftAssignmentRepository.save(assignment);
+        notificationService.createNotification(
+                worker.getId(),
+                NotificationType.SHIFT_ASSIGNED,
+                "Turno asignado manualmente para " + dto.getDate() + " (" + dto.getType() + ")"
+        );
+        auditLogService.log(
+                hospitalId,
+                actorUserId,
+                "SHIFT_MANUAL_ASSIGNED",
+                "shift_assignments",
+                saved.getId(),
+                "Asignacion manual para " + worker.getFirstName() + " " + worker.getLastName() + " en " + dto.getDate()
+        );
 
         return toDto(saved);
     }
 
+    /**
+     * Cancela una asignacion existente.
+     */
     public void cancelAssignment(String hospitalId, String actorUserId, String shiftId) {
         ShiftAssignmentDocument assignment = shiftAssignmentRepository.findById(shiftId)
                 .orElseThrow(() -> new NotFoundException("Asignacion no encontrada"));
-        if (!assignment.getHospitalId().equals(hospitalId)) {
-            throw new IllegalArgumentException("La asignación no pertenece a este hospital.");
+
+        if (!hospitalId.equals(assignment.getHospitalId())) {
+            throw new IllegalArgumentException("La asignacion no pertenece a este hospital.");
         }
+
         assignment.setStatus(ShiftAssignmentStatus.CANCELLED);
         assignment.setUpdatedAt(LocalDateTime.now().toString());
         shiftAssignmentRepository.save(assignment);
-        auditLogService.log(hospitalId, actorUserId, "SHIFT_CANCELLED",
-                "shift_assignments", shiftId, "Asignacion cancelada");
+
+        auditLogService.log(
+                hospitalId,
+                actorUserId,
+                "SHIFT_CANCELLED",
+                "shift_assignments",
+                shiftId,
+                "Asignacion cancelada"
+        );
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Demandas y Consultas
-    // ──────────────────────────────────────────────────────────────────────────
-
+    /**
+     * Lista las demandas de turno de un hospital.
+     */
     public List<ShiftRequirementDto> getRequirementsForHospital(String hospitalId, String startDate, String endDate) {
-        List<ShiftRequirementDocument> requirements = (startDate != null && endDate != null)
-                ? shiftRequirementRepository.findInDateRange(hospitalId, startDate, endDate)
-                : shiftRequirementRepository.findByHospitalId(hospitalId);
+        List<ShiftRequirementDocument> requirements;
+        if (startDate != null && endDate != null) {
+            requirements = shiftRequirementRepository.findInDateRange(hospitalId, startDate, endDate);
+        } else {
+            requirements = shiftRequirementRepository.findByHospitalId(hospitalId);
+        }
 
-        return requirements.stream().map(req -> ShiftRequirementDto.builder()
-                .id(req.getId())
-                .date(req.getDate())
-                .department(req.getDepartment())
-                .shiftTypeCode(req.getShiftTypeCode())
-                .requiredWorkers(req.getRequiredWorkers())
-                .build()).collect(Collectors.toList());
+        List<ShiftRequirementDto> result = new ArrayList<>();
+        for (ShiftRequirementDocument requirement : requirements) {
+            result.add(toRequirementDto(requirement));
+        }
+        return result;
     }
 
+    /**
+     * Elimina una demanda de turno.
+     */
     public void deleteRequirement(String hospitalId, String actorUserId, String requirementId) {
-        ShiftRequirementDocument req = shiftRequirementRepository.findById(requirementId)
+        ShiftRequirementDocument requirement = shiftRequirementRepository.findById(requirementId)
                 .orElseThrow(() -> new NotFoundException("Demanda no encontrada"));
-        if (!req.getHospitalId().equals(hospitalId)) {
+
+        if (!hospitalId.equals(requirement.getHospitalId())) {
             throw new IllegalArgumentException("La demanda no pertenece a este hospital.");
         }
-        shiftRequirementRepository.delete(req);
-        auditLogService.log(hospitalId, actorUserId, "REQUIREMENT_DELETED",
-                "shift_requirements", requirementId, "Demanda eliminada");
+
+        shiftRequirementRepository.delete(requirement);
+        auditLogService.log(
+                hospitalId,
+                actorUserId,
+                "REQUIREMENT_DELETED",
+                "shift_requirements",
+                requirementId,
+                "Demanda eliminada"
+        );
     }
 
+    /**
+     * Lista las asignaciones de un trabajador.
+     */
     public List<ShiftAssignmentDto> getAssignmentsForWorker(String workerId) {
-        return shiftAssignmentRepository.findByWorkerId(workerId).stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        List<ShiftAssignmentDto> assignments = new ArrayList<>();
+        for (ShiftAssignmentDocument assignment : shiftAssignmentRepository.findByWorkerId(workerId)) {
+            assignments.add(toDto(assignment));
+        }
+        return assignments;
     }
 
-    public List<ShiftAssignmentDto> getAssignmentsForHospital(String hospitalId,
-                                                               String startDate,
-                                                               String endDate) {
-        List<ShiftAssignmentDocument> all = (startDate != null && endDate != null)
-                ? shiftAssignmentRepository.findByHospitalIdAndStartAtBetween(
-                        hospitalId,
-                        LocalDate.parse(startDate).atStartOfDay().toString(),
-                        LocalDate.parse(endDate).plusDays(1).atStartOfDay().toString())
-                : shiftAssignmentRepository.findByHospitalId(hospitalId);
+    /**
+     * Lista las asignaciones activas de un hospital.
+     */
+    public List<ShiftAssignmentDto> getAssignmentsForHospital(String hospitalId, String startDate, String endDate) {
+        List<ShiftAssignmentDocument> documents = getAssignmentsByRange(hospitalId, startDate, endDate);
+        List<ShiftAssignmentDto> assignments = new ArrayList<>();
 
-        return all.stream()
-                .filter(a -> a.getStatus() != ShiftAssignmentStatus.CANCELLED)
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        for (ShiftAssignmentDocument assignment : documents) {
+            if (assignment.getStatus() != ShiftAssignmentStatus.CANCELLED) {
+                assignments.add(toDto(assignment));
+            }
+        }
+
+        return assignments;
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Helpers privados
-    // ──────────────────────────────────────────────────────────────────────────
+    /**
+     * Ordena las demandas por fecha y tipo de turno.
+     */
+    private List<ShiftRequirementDocument> getSortedRequirements(String hospitalId, String startDate, String endDate) {
+        List<ShiftRequirementDocument> requirements = shiftRequirementRepository.findInDateRange(hospitalId, startDate, endDate);
+        if (requirements.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "No hay demandas de turno registradas entre " + startDate + " y " + endDate + "."
+            );
+        }
 
+        requirements.sort(Comparator.comparing(ShiftRequirementDocument::getDate)
+                .thenComparing(ShiftRequirementDocument::getShiftTypeCode));
+        return requirements;
+    }
+
+    /**
+     * Devuelve los trabajadores activos del hospital.
+     */
+    private List<UserDocument> getWorkersForHospital(String hospitalId) {
+        List<UserDocument> workers = userRepository.findByHospitalIdAndRole(hospitalId, UserRole.WORKER);
+        if (workers.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No hay trabajadores activos en el hospital.");
+        }
+        return workers;
+    }
+
+    /**
+     * Calcula la siguiente version para un lote de autoasignacion.
+     */
+    private int getNextAssignmentVersion(String hospitalId) {
+        int version = 0;
+        for (ShiftAssignmentDocument assignment : shiftAssignmentRepository.findByHospitalId(hospitalId)) {
+            if (assignment.getVersion() > version) {
+                version = assignment.getVersion();
+            }
+        }
+        return version + 1;
+    }
+
+    /**
+     * Obtiene el tipo de turno o lanza error.
+     */
+    private ShiftTypeDocument requireShiftType(String hospitalId, String shiftTypeCode) {
+        return shiftTypeRepository.findByHospitalIdAndCode(hospitalId, shiftTypeCode)
+                .orElseThrow(() -> new NotFoundException("Tipo de turno no encontrado: " + shiftTypeCode));
+    }
+
+    /**
+     * Construye la lista final de candidatos por fases.
+     */
+    private List<UserDocument> buildCandidates(ShiftRequirementDocument requirement,
+                                               ShiftTypeDocument shiftType,
+                                               List<UserDocument> workers,
+                                               HospitalSettingsDto settings) {
+        List<UserDocument> baseCandidates = getBaseCandidates(requirement, shiftType, workers);
+        List<UserDocument> candidates = new ArrayList<>();
+
+        addStrictCandidates(candidates, baseCandidates, requirement, shiftType, settings);
+        addRelaxedCandidates(candidates, baseCandidates, requirement, shiftType, settings);
+        addDepartmentCandidates(candidates, baseCandidates, requirement, shiftType);
+        addAnyFreeWorkerCandidates(candidates, baseCandidates, shiftType, requirement);
+
+        return candidates;
+    }
+
+    /**
+     * Filtra trabajadores que no se solapan con el turno pedido.
+     */
+    private List<UserDocument> getBaseCandidates(ShiftRequirementDocument requirement,
+                                                 ShiftTypeDocument shiftType,
+                                                 List<UserDocument> workers) {
+        List<UserDocument> candidates = new ArrayList<>();
+        for (UserDocument worker : workers) {
+            if (!hasOverlap(worker.getId(), requirement.getDate(), shiftType)) {
+                candidates.add(worker);
+            }
+        }
+        return candidates;
+    }
+
+    /**
+     * Anade candidatos que cumplen todos los criterios.
+     */
+    private void addStrictCandidates(List<UserDocument> target,
+                                     List<UserDocument> baseCandidates,
+                                     ShiftRequirementDocument requirement,
+                                     ShiftTypeDocument shiftType,
+                                     HospitalSettingsDto settings) {
+        List<UserDocument> matches = new ArrayList<>();
+        for (UserDocument worker : baseCandidates) {
+            if (isIdealCandidate(worker, requirement)
+                    && respectsRest(worker.getId(), requirement.getDate(), shiftType, settings.getMinRestHours())
+                    && respectsWeeklyHours(worker.getId(), requirement.getDate(), shiftType, settings.getMaxWeeklyHours())) {
+                matches.add(worker);
+            }
+        }
+        addSortedUnique(target, matches, requirement, shiftType);
+    }
+
+    /**
+     * Anade candidatos ignorando el limite semanal si hace falta.
+     */
+    private void addRelaxedCandidates(List<UserDocument> target,
+                                      List<UserDocument> baseCandidates,
+                                      ShiftRequirementDocument requirement,
+                                      ShiftTypeDocument shiftType,
+                                      HospitalSettingsDto settings) {
+        List<UserDocument> matches = new ArrayList<>();
+        for (UserDocument worker : baseCandidates) {
+            if (!target.contains(worker)
+                    && isIdealCandidate(worker, requirement)
+                    && respectsRest(worker.getId(), requirement.getDate(), shiftType, settings.getMinRestHours())) {
+                matches.add(worker);
+            }
+        }
+        addSortedUnique(target, matches, requirement, shiftType);
+    }
+
+    /**
+     * Anade candidatos del mismo departamento aunque no cumplan descansos u horas.
+     */
+    private void addDepartmentCandidates(List<UserDocument> target,
+                                         List<UserDocument> baseCandidates,
+                                         ShiftRequirementDocument requirement,
+                                         ShiftTypeDocument shiftType) {
+        List<UserDocument> matches = new ArrayList<>();
+        for (UserDocument worker : baseCandidates) {
+            if (!target.contains(worker) && isIdealCandidate(worker, requirement)) {
+                matches.add(worker);
+            }
+        }
+        addSortedUnique(target, matches, requirement, shiftType);
+    }
+
+    /**
+     * Anade cualquier trabajador libre restante.
+     */
+    private void addAnyFreeWorkerCandidates(List<UserDocument> target,
+                                            List<UserDocument> baseCandidates,
+                                            ShiftTypeDocument shiftType,
+                                            ShiftRequirementDocument requirement) {
+        List<UserDocument> matches = new ArrayList<>();
+        for (UserDocument worker : baseCandidates) {
+            if (!target.contains(worker)) {
+                matches.add(worker);
+            }
+        }
+        addSortedUnique(target, matches, requirement, shiftType);
+    }
+
+    /**
+     * Indica si el trabajador es candidato ideal por estado, departamento y ausencias.
+     */
+    private boolean isIdealCandidate(UserDocument worker, ShiftRequirementDocument requirement) {
+        boolean sameDepartment = worker.getDepartment() != null
+                && requirement.getDepartment().equalsIgnoreCase(worker.getDepartment());
+        return worker.isEnabled()
+                && sameDepartment
+                && !isOnApprovedLeave(worker.getId(), requirement.getDate());
+    }
+
+    /**
+     * Ordena candidatos por puntuacion y evita duplicados.
+     */
+    private void addSortedUnique(List<UserDocument> target,
+                                 List<UserDocument> source,
+                                 ShiftRequirementDocument requirement,
+                                 ShiftTypeDocument shiftType) {
+        source.sort(Comparator.comparingDouble(worker -> calculateScore(worker.getId(), requirement.getDate(), shiftType)));
+        for (UserDocument worker : source) {
+            if (!target.contains(worker)) {
+                target.add(worker);
+            }
+        }
+    }
+
+    /**
+     * Asigna una demanda a los mejores candidatos disponibles.
+     */
+    private int assignRequirement(String hospitalId,
+                                  ShiftRequirementDocument requirement,
+                                  ShiftTypeDocument shiftType,
+                                  int version,
+                                  List<UserDocument> candidates,
+                                  List<ShiftAssignmentDto> assignments) {
+        int covered = 0;
+        for (UserDocument candidate : candidates) {
+            if (covered >= requirement.getRequiredWorkers()) {
+                break;
+            }
+
+            ShiftAssignmentDocument saved = shiftAssignmentRepository.save(
+                    buildAssignment(hospitalId, candidate, requirement, shiftType, version)
+            );
+            assignments.add(toDto(saved));
+            covered++;
+
+            notificationService.createNotification(
+                    candidate.getId(),
+                    NotificationType.SHIFT_ASSIGNED,
+                    "Nuevo turno asignado para " + requirement.getDate() + " (" + requirement.getShiftTypeCode() + ")"
+            );
+        }
+        return covered;
+    }
+
+    /**
+     * Avisa a los administradores si una demanda queda sin cubrir.
+     */
+    private void notifyUncoveredRequirement(String hospitalId,
+                                            ShiftRequirementDocument requirement,
+                                            int covered) {
+        int required = requirement.getRequiredWorkers();
+        String message = "Cobertura incompleta en " + requirement.getDepartment()
+                + " para " + requirement.getDate()
+                + " (" + covered + "/" + required + ")";
+
+        userRepository.findByHospitalIdAndRole(hospitalId, UserRole.HOSPITAL_ADMIN)
+                .forEach(admin -> notificationService.createNotification(
+                        admin.getId(),
+                        NotificationType.SHIFT_UNCOVERED,
+                        message
+                ));
+    }
+
+    /**
+     * Construye el rango temporal de una asignacion manual.
+     */
+    private ShiftDateRange buildManualRange(String hospitalId, ManualShiftRequestDto dto) {
+        if ("SHIFT".equalsIgnoreCase(dto.getType())) {
+            return buildShiftRange(hospitalId, dto);
+        }
+
+        LocalDateTime start = LocalDate.parse(dto.getDate()).atStartOfDay();
+        LocalDateTime end = start.plusDays(1);
+        return new ShiftDateRange(start, end, dto.getType());
+    }
+
+    /**
+     * Construye el rango temporal de un turno normal.
+     */
+    private ShiftDateRange buildShiftRange(String hospitalId, ManualShiftRequestDto dto) {
+        if (dto.getShiftTypeCode() == null || dto.getShiftTypeCode().isBlank()) {
+            throw new IllegalArgumentException("El codigo de tipo de turno es obligatorio para asignaciones SHIFT.");
+        }
+
+        ShiftTypeDocument shiftType = requireShiftType(hospitalId, dto.getShiftTypeCode());
+        LocalDateTime start = combine(dto.getDate(), shiftType.getStartTime());
+        LocalDateTime end = combine(dto.getDate(), shiftType.getEndTime());
+        if (shiftType.isCrossesMidnight() || !end.isAfter(start)) {
+            end = end.plusDays(1);
+        }
+
+        return new ShiftDateRange(start, end, shiftType.getCode());
+    }
+
+    /**
+     * Obtiene asignaciones por rango o todas las del hospital.
+     */
+    private List<ShiftAssignmentDocument> getAssignmentsByRange(String hospitalId, String startDate, String endDate) {
+        if (startDate != null && endDate != null) {
+            return shiftAssignmentRepository.findByHospitalIdAndStartAtBetween(
+                    hospitalId,
+                    LocalDate.parse(startDate).atStartOfDay().toString(),
+                    LocalDate.parse(endDate).plusDays(1).atStartOfDay().toString()
+            );
+        }
+        return shiftAssignmentRepository.findByHospitalId(hospitalId);
+    }
+
+    /**
+     * Comprueba si el trabajador tiene una ausencia aprobada en esa fecha.
+     */
     private boolean isOnApprovedLeave(String workerId, String date) {
         LocalDate target = LocalDate.parse(date);
         return leaveRequestRepository.findByUserId(workerId).stream()
-                .filter(r -> "APPROVED".equals(r.getStatus().name()))
-                .anyMatch(r -> !target.isBefore(LocalDate.parse(r.getStartDate()))
-                            && !target.isAfter(LocalDate.parse(r.getEndDate())));
+                .filter(request -> "APPROVED".equals(request.getStatus().name()))
+                .anyMatch(request -> !target.isBefore(LocalDate.parse(request.getStartDate()))
+                        && !target.isAfter(LocalDate.parse(request.getEndDate())));
     }
 
+    /**
+     * Comprueba si un turno se solapa con otro ya existente.
+     */
     private boolean hasOverlap(String workerId, String date, ShiftTypeDocument shiftType) {
         LocalDateTime start = combine(date, shiftType.getStartTime());
-        LocalDateTime end   = combine(date, shiftType.getEndTime());
-        if (shiftType.isCrossesMidnight() || !end.isAfter(start)) end = end.plusDays(1);
+        LocalDateTime end = combine(date, shiftType.getEndTime());
+        if (shiftType.isCrossesMidnight() || !end.isAfter(start)) {
+            end = end.plusDays(1);
+        }
+
         LocalDateTime finalEnd = end;
         return shiftAssignmentRepository.findByWorkerId(workerId).stream()
-                .filter(i -> i.getStatus() != ShiftAssignmentStatus.CANCELLED)
-                .anyMatch(i -> start.isBefore(LocalDateTime.parse(i.getEndAt()))
-                            && LocalDateTime.parse(i.getStartAt()).isBefore(finalEnd));
+                .filter(assignment -> assignment.getStatus() != ShiftAssignmentStatus.CANCELLED)
+                .anyMatch(assignment -> start.isBefore(LocalDateTime.parse(assignment.getEndAt()))
+                        && LocalDateTime.parse(assignment.getStartAt()).isBefore(finalEnd));
     }
 
-    private boolean respectsRest(String workerId, String date, ShiftTypeDocument shiftType,
-                                  int minRestHours) {
+    /**
+     * Comprueba si se respeta el descanso minimo entre turnos.
+     */
+    private boolean respectsRest(String workerId, String date, ShiftTypeDocument shiftType, int minRestHours) {
         LocalDateTime start = combine(date, shiftType.getStartTime());
         return shiftAssignmentRepository.findByWorkerId(workerId).stream()
-                .filter(i -> i.getStatus() != ShiftAssignmentStatus.CANCELLED)
-                .noneMatch(i -> {
-                    long hours = Duration.between(LocalDateTime.parse(i.getEndAt()), start).toHours();
+                .filter(assignment -> assignment.getStatus() != ShiftAssignmentStatus.CANCELLED)
+                .noneMatch(assignment -> {
+                    long hours = Duration.between(LocalDateTime.parse(assignment.getEndAt()), start).toHours();
                     return hours < minRestHours && hours > -24;
                 });
     }
 
-    private boolean respectsWeeklyHours(String workerId, String date, ShiftTypeDocument shiftType,
-                                         int maxWeeklyHours) {
-        LocalDate target    = LocalDate.parse(date);
+    /**
+     * Comprueba si el trabajador sigue dentro del limite semanal de horas.
+     */
+    private boolean respectsWeeklyHours(String workerId, String date, ShiftTypeDocument shiftType, int maxWeeklyHours) {
+        LocalDate target = LocalDate.parse(date);
         LocalDate weekStart = target.minusDays(target.getDayOfWeek().getValue() - 1L);
-        LocalDate weekEnd   = weekStart.plusDays(6);
-        double assignedHours = shiftAssignmentRepository
-                .findByWorkerIdAndStartAtBetween(workerId,
+        LocalDate weekEnd = weekStart.plusDays(6);
+
+        double assignedHours = shiftAssignmentRepository.findByWorkerIdAndStartAtBetween(
+                        workerId,
                         weekStart.atStartOfDay().toString(),
-                        weekEnd.plusDays(1).atStartOfDay().toString())
-                .stream()
-                .filter(i -> i.getStatus() != ShiftAssignmentStatus.CANCELLED)
+                        weekEnd.plusDays(1).atStartOfDay().toString()
+                ).stream()
+                .filter(assignment -> assignment.getStatus() != ShiftAssignmentStatus.CANCELLED)
                 .mapToDouble(this::getAssignmentHours)
                 .sum();
+
         return assignedHours + getShiftHours(shiftType, target) <= maxWeeklyHours;
     }
 
+    /**
+     * Calcula una puntuacion simple para repartir carga de trabajo.
+     */
     private double calculateScore(String workerId, String date, ShiftTypeDocument shiftType) {
-        LocalDate target     = LocalDate.parse(date);
+        LocalDate target = LocalDate.parse(date);
         LocalDate monthStart = YearMonth.from(target).atDay(1);
-        LocalDate monthEnd   = YearMonth.from(target).atEndOfMonth();
-        List<ShiftAssignmentDocument> assignments = shiftAssignmentRepository
-                .findByWorkerIdAndStartAtBetween(workerId,
-                        monthStart.atStartOfDay().toString(),
-                        monthEnd.plusDays(1).atStartOfDay().toString());
-        long nightCount   = assignments.stream()
-                .filter(i -> "NIGHT".equalsIgnoreCase(i.getShiftTypeCode())).count();
+        LocalDate monthEnd = YearMonth.from(target).atEndOfMonth();
+
+        List<ShiftAssignmentDocument> assignments = shiftAssignmentRepository.findByWorkerIdAndStartAtBetween(
+                workerId,
+                monthStart.atStartOfDay().toString(),
+                monthEnd.plusDays(1).atStartOfDay().toString()
+        );
+
+        long nightCount = assignments.stream()
+                .filter(assignment -> "NIGHT".equalsIgnoreCase(assignment.getShiftTypeCode()))
+                .count();
         long weekendCount = assignments.stream()
-                .filter(i -> LocalDateTime.parse(i.getStartAt()).getDayOfWeek().getValue() >= 6)
+                .filter(assignment -> LocalDateTime.parse(assignment.getStartAt()).getDayOfWeek().getValue() >= 6)
                 .count();
         double totalHours = assignments.stream().mapToDouble(this::getAssignmentHours).sum();
+
         double score = totalHours * 2 + weekendCount * 2;
-        if ("NIGHT".equalsIgnoreCase(shiftType.getCode())) score += nightCount * 3;
+        if ("NIGHT".equalsIgnoreCase(shiftType.getCode())) {
+            score += nightCount * 3;
+        }
         return score;
     }
 
-    private ShiftAssignmentDocument buildAssignment(String hospitalId, UserDocument worker,
-                                                     ShiftRequirementDocument requirement,
-                                                     ShiftTypeDocument shiftType, int version) {
+    /**
+     * Construye la entidad de asignacion persistida.
+     */
+    private ShiftAssignmentDocument buildAssignment(String hospitalId,
+                                                    UserDocument worker,
+                                                    ShiftRequirementDocument requirement,
+                                                    ShiftTypeDocument shiftType,
+                                                    int version) {
         LocalDateTime start = combine(requirement.getDate(), shiftType.getStartTime());
-        LocalDateTime end   = combine(requirement.getDate(), shiftType.getEndTime());
-        if (shiftType.isCrossesMidnight() || !end.isAfter(start)) end = end.plusDays(1);
+        LocalDateTime end = combine(requirement.getDate(), shiftType.getEndTime());
+        if (shiftType.isCrossesMidnight() || !end.isAfter(start)) {
+            end = end.plusDays(1);
+        }
+
         LocalDateTime now = LocalDateTime.now();
         return ShiftAssignmentDocument.builder()
                 .id(UUID.randomUUID().toString())
@@ -433,38 +652,72 @@ public class SchedulingService {
                 .build();
     }
 
-    private double getAssignmentHours(ShiftAssignmentDocument a) {
+    /**
+     * Calcula las horas de una asignacion existente.
+     */
+    private double getAssignmentHours(ShiftAssignmentDocument assignment) {
         return Duration.between(
-                LocalDateTime.parse(a.getStartAt()),
-                LocalDateTime.parse(a.getEndAt())).toHours();
+                LocalDateTime.parse(assignment.getStartAt()),
+                LocalDateTime.parse(assignment.getEndAt())
+        ).toHours();
     }
 
+    /**
+     * Calcula las horas de un tipo de turno.
+     */
     private double getShiftHours(ShiftTypeDocument shiftType, LocalDate date) {
         LocalDateTime start = combine(date.toString(), shiftType.getStartTime());
-        LocalDateTime end   = combine(date.toString(), shiftType.getEndTime());
-        if (shiftType.isCrossesMidnight() || !end.isAfter(start)) end = end.plusDays(1);
+        LocalDateTime end = combine(date.toString(), shiftType.getEndTime());
+        if (shiftType.isCrossesMidnight() || !end.isAfter(start)) {
+            end = end.plusDays(1);
+        }
         return Duration.between(start, end).toHours();
     }
 
+    /**
+     * Une una fecha y una hora en un LocalDateTime.
+     */
     private LocalDateTime combine(String date, String time) {
         return LocalDateTime.of(LocalDate.parse(date), LocalTime.parse(time));
     }
 
-    private ShiftAssignmentDto toDto(ShiftAssignmentDocument d) {
-        return ShiftAssignmentDto.builder()
-                .id(d.getId())
-                .hospitalId(d.getHospitalId())
-                .workerId(d.getWorkerId())
-                .workerFullName(d.getWorkerFullName())
-                .department(d.getDepartment())
-                .shiftTypeCode(d.getShiftTypeCode())
-                .startAt(d.getStartAt())
-                .endAt(d.getEndAt())
-                .status(d.getStatus())
-                .source(d.getSource())
-                .version(d.getVersion())
-                .createdAt(d.getCreatedAt())
-                .updatedAt(d.getUpdatedAt())
+    /**
+     * Convierte una demanda persistida a DTO.
+     */
+    private ShiftRequirementDto toRequirementDto(ShiftRequirementDocument requirement) {
+        return ShiftRequirementDto.builder()
+                .id(requirement.getId())
+                .date(requirement.getDate())
+                .department(requirement.getDepartment())
+                .shiftTypeCode(requirement.getShiftTypeCode())
+                .requiredWorkers(requirement.getRequiredWorkers())
                 .build();
+    }
+
+    /**
+     * Convierte una asignacion persistida a DTO.
+     */
+    private ShiftAssignmentDto toDto(ShiftAssignmentDocument document) {
+        return ShiftAssignmentDto.builder()
+                .id(document.getId())
+                .hospitalId(document.getHospitalId())
+                .workerId(document.getWorkerId())
+                .workerFullName(document.getWorkerFullName())
+                .department(document.getDepartment())
+                .shiftTypeCode(document.getShiftTypeCode())
+                .startAt(document.getStartAt())
+                .endAt(document.getEndAt())
+                .status(document.getStatus())
+                .source(document.getSource())
+                .version(document.getVersion())
+                .createdAt(document.getCreatedAt())
+                .updatedAt(document.getUpdatedAt())
+                .build();
+    }
+
+    /**
+     * Record simple para reutilizar el rango temporal de una asignacion manual.
+     */
+    private record ShiftDateRange(LocalDateTime start, LocalDateTime end, String shiftTypeCode) {
     }
 }

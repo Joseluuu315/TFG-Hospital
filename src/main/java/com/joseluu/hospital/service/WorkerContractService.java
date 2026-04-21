@@ -14,6 +14,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Servicio encargado de los contratos activos de los trabajadores.
+ */
 @Service
 public class WorkerContractService {
     private final WorkerContractRepository workerContractRepository;
@@ -28,36 +31,34 @@ public class WorkerContractService {
         this.hospitalSettingsService = hospitalSettingsService;
     }
 
+    /**
+     * Devuelve el contrato activo de un trabajador.
+     */
     public WorkerContractDto getActiveByWorker(String workerId) {
         return workerContractRepository.findByWorkerIdAndActiveTrue(workerId)
                 .map(this::toDto)
                 .orElseThrow(() -> new NotFoundException("Contrato no encontrado"));
     }
 
+    /**
+     * Crea o sustituye el contrato activo del trabajador.
+     */
     public WorkerContractDto upsert(String hospitalId, UpsertWorkerContractRequestDto request) {
-        UserDocument worker = userRepository.findById(request.getWorkerId())
-                .orElseThrow(() -> new NotFoundException("Trabajador no encontrado"));
-        if (!hospitalId.equals(worker.getHospitalId())) {
-            throw new NotFoundException("Trabajador fuera del hospital");
-        }
-
-        workerContractRepository.findByWorkerIdAndActiveTrue(worker.getId()).ifPresent(current -> {
-            current.setActive(false);
-            current.setUpdatedAt(LocalDateTime.now().toString());
-            workerContractRepository.save(current);
-        });
+        UserDocument worker = requireWorkerInHospital(hospitalId, request.getWorkerId());
+        deactivateCurrentContract(worker.getId());
 
         HospitalSettingsDto settings = hospitalSettingsService.getByHospital(hospitalId);
         LocalDateTime now = LocalDateTime.now();
+
         WorkerContractDocument document = WorkerContractDocument.builder()
                 .id(UUID.randomUUID().toString())
                 .hospitalId(hospitalId)
                 .workerId(worker.getId())
                 .hourlyRate(request.getHourlyRate())
                 .weeklyHours(request.getWeeklyHours())
-                .nightBonusPct(request.getNightBonusPct() != null ? request.getNightBonusPct() : settings.getNightBonusPct())
-                .holidayBonusPct(request.getHolidayBonusPct() != null ? request.getHolidayBonusPct() : settings.getHolidayBonusPct())
-                .overtimeMultiplier(request.getOvertimeMultiplier() != null ? request.getOvertimeMultiplier() : settings.getOvertimeMultiplier())
+                .nightBonusPct(valueOrDefault(request.getNightBonusPct(), settings.getNightBonusPct()))
+                .holidayBonusPct(valueOrDefault(request.getHolidayBonusPct(), settings.getHolidayBonusPct()))
+                .overtimeMultiplier(valueOrDefault(request.getOvertimeMultiplier(), settings.getOvertimeMultiplier()))
                 .effectiveFrom(request.getEffectiveFrom() != null ? request.getEffectiveFrom() : LocalDate.now().toString())
                 .active(true)
                 .createdAt(now.toString())
@@ -67,6 +68,39 @@ public class WorkerContractService {
         return toDto(workerContractRepository.save(document));
     }
 
+    /**
+     * Obtiene el trabajador y comprueba que pertenece al hospital.
+     */
+    private UserDocument requireWorkerInHospital(String hospitalId, String workerId) {
+        UserDocument worker = userRepository.findById(workerId)
+                .orElseThrow(() -> new NotFoundException("Trabajador no encontrado"));
+        if (!hospitalId.equals(worker.getHospitalId())) {
+            throw new NotFoundException("Trabajador fuera del hospital");
+        }
+        return worker;
+    }
+
+    /**
+     * Desactiva el contrato actual si existe.
+     */
+    private void deactivateCurrentContract(String workerId) {
+        workerContractRepository.findByWorkerIdAndActiveTrue(workerId).ifPresent(current -> {
+            current.setActive(false);
+            current.setUpdatedAt(LocalDateTime.now().toString());
+            workerContractRepository.save(current);
+        });
+    }
+
+    /**
+     * Devuelve el valor indicado o el valor por defecto.
+     */
+    private Double valueOrDefault(Double value, Double defaultValue) {
+        return value != null ? value : defaultValue;
+    }
+
+    /**
+     * Convierte la entidad a DTO.
+     */
     private WorkerContractDto toDto(WorkerContractDocument document) {
         return WorkerContractDto.builder()
                 .id(document.getId())

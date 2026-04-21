@@ -11,6 +11,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 
+/**
+ * Servicio encargado de la configuracion general de turnos y nominas por hospital.
+ */
 @Service
 public class HospitalSettingsService {
     private final HospitalSettingsRepository hospitalSettingsRepository;
@@ -25,14 +28,17 @@ public class HospitalSettingsService {
         this.notificationService = notificationService;
     }
 
+    /**
+     * Devuelve la configuracion de un hospital y crea valores por defecto si faltan.
+     */
     public HospitalSettingsDto getByHospital(String hospitalId) {
-        return toDto(hospitalSettingsRepository.findById(hospitalId)
-                .orElseGet(() -> {
-                    seedDefaults(hospitalId);
-                    return hospitalSettingsRepository.findById(hospitalId).get();
-                }));
+        ensureDefaults(hospitalId);
+        return toDto(requireSettings(hospitalId));
     }
 
+    /**
+     * Crea o actualiza la configuracion de un hospital.
+     */
     public HospitalSettingsDto upsert(String hospitalId, HospitalSettingsDto request) {
         hospitalRepository.findById(hospitalId)
                 .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
@@ -56,15 +62,22 @@ public class HospitalSettingsService {
         current.setUpdatedAt(now.toString());
 
         HospitalSettingsDocument saved = hospitalSettingsRepository.save(current);
-        notificationService.createNotificationForRole(UserRole.HOSPITAL_ADMIN, NotificationType.HOSPITAL_SETTINGS_UPDATED,
-                "La configuracion de turnos y nominas ha sido actualizada");
+        notificationService.createNotificationForRole(
+                UserRole.HOSPITAL_ADMIN,
+                NotificationType.HOSPITAL_SETTINGS_UPDATED,
+                "La configuracion de turnos y nominas ha sido actualizada"
+        );
         return toDto(saved);
     }
 
+    /**
+     * Inserta la configuracion inicial de un hospital si no existe.
+     */
     public void seedDefaults(String hospitalId) {
         if (hospitalSettingsRepository.existsById(hospitalId)) {
             return;
         }
+
         LocalDateTime now = LocalDateTime.now();
         hospitalSettingsRepository.save(HospitalSettingsDocument.builder()
                 .hospitalId(hospitalId)
@@ -82,6 +95,26 @@ public class HospitalSettingsService {
                 .build());
     }
 
+    /**
+     * Asegura que el hospital tenga una configuracion base.
+     */
+    private void ensureDefaults(String hospitalId) {
+        if (!hospitalSettingsRepository.existsById(hospitalId)) {
+            seedDefaults(hospitalId);
+        }
+    }
+
+    /**
+     * Obtiene la configuracion persistida o lanza error.
+     */
+    private HospitalSettingsDocument requireSettings(String hospitalId) {
+        return hospitalSettingsRepository.findById(hospitalId)
+                .orElseThrow(() -> new NotFoundException("Configuracion no encontrada"));
+    }
+
+    /**
+     * Convierte la entidad a DTO.
+     */
     private HospitalSettingsDto toDto(HospitalSettingsDocument document) {
         return HospitalSettingsDto.builder()
                 .hospitalId(document.getHospitalId())

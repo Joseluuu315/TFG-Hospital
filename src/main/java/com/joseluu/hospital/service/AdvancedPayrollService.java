@@ -31,8 +31,10 @@ import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
+/**
+ * Servicio encargado del calculo detallado de nominas.
+ */
 @Service
 public class AdvancedPayrollService {
     private final PayrollRepository payrollRepository;
@@ -65,49 +67,155 @@ public class AdvancedPayrollService {
         this.auditLogService = auditLogService;
     }
 
+    /**
+     * Genera o recalcula la nomina de un trabajador para un periodo.
+     */
     public PayrollDto generate(String hospitalId, String workerId, String period, String actorUserId) {
+        UserDocument worker = requireWorkerInHospital(hospitalId, workerId);
+        WorkerContractDocument contract = workerContractRepository.findByWorkerIdAndActiveTrue(workerId)
+                .orElseThrow(() -> new NotFoundException("Contrato no encontrado"));
+
+        PeriodRange range = buildPeriodRange(period);
+        List<ShiftAssignmentDocument> workedShifts = getWorkedShifts(workerId, range);
+        List<LeaveRequestDocument> absences = getApprovedAbsences(workerId, period);
+        List<PayrollAdjustmentDocument> adjustments = payrollAdjustmentRepository.findByWorkerIdAndPeriod(workerId, period);
+
+        PayrollBreakdown breakdown = computeBreakdown(workedShifts, absences, contract);
+        double bonuses = sumAdjustments(adjustments, PayrollAdjustmentType.BONUS);
+        double penalties = sumAdjustments(adjustments, PayrollAdjustmentType.PENALTY);
+
+        PayrollDocument payroll = buildPayroll(worker, hospitalId, period, breakdown, bonuses, penalties);
+        PayrollDocument savedPayroll = payrollRepository.save(payroll);
+
+        replacePayrollItems(savedPayroll.getId(), hospitalId, workerId, contract, breakdown, bonuses, penalties);
+        notificationService.createNotification(workerId, NotificationType.PAYROLL_GENERATED, "Se ha generado la nomina del periodo " + period);
+        auditLogService.log(
+                hospitalId,
+                actorUserId,
+                "PAYROLL_GENERATED",
+                "payrolls",
+                savedPayroll.getId(),
+                "Nomina generada para " + workerId + " en " + period
+        );
+
+        return toDto(savedPayroll);
+    }
+
+    /**
+     * Devuelve las lineas de una nomina.
+     */
+    public List<PayrollItemDto> getItems(String payrollId) {
+        List<PayrollItemDto> items = new ArrayList<>();
+        for (PayrollItemDocument document : payrollItemRepository.findByPayrollId(payrollId)) {
+            items.add(toItemDto(document));
+        }
+        return items;
+    }
+
+    /**
+     * Crea un ajuste manual para una nomina.
+     */
+    public PayrollAdjustmentDto createAdjustment(PayrollAdjustmentDto dto) {
+        PayrollAdjustmentDocument document = PayrollAdjustmentDocument.builder()
+                .id(UUID.randomUUID().toString())
+                .hospitalId(dto.getHospitalId())
+                .workerId(dto.getWorkerId())
+                .period(dto.getPeriod())
+                .type(dto.getType())
+                .description(dto.getDescription())
+                .amount(dto.getAmount())
+                .createdBy(dto.getCreatedBy())
+                .createdAt(LocalDateTime.now().toString())
+                .build();
+
+        return toAdjustmentDto(payrollAdjustmentRepository.save(document));
+    }
+
+    /**
+     * Obtiene el trabajador y valida su hospital.
+     */
+    private UserDocument requireWorkerInHospital(String hospitalId, String workerId) {
         UserDocument worker = userRepository.findById(workerId)
                 .orElseThrow(() -> new NotFoundException("Trabajador no encontrado"));
         if (!hospitalId.equals(worker.getHospitalId())) {
             throw new NotFoundException("Trabajador fuera del hospital");
         }
-        WorkerContractDocument contract = workerContractRepository.findByWorkerIdAndActiveTrue(workerId)
-                .orElseThrow(() -> new NotFoundException("Contrato no encontrado"));
+        return worker;
+    }
 
+    /**
+     * Construye el rango temporal de un periodo mensual.
+     */
+    private PeriodRange buildPeriodRange(String period) {
         YearMonth yearMonth = YearMonth.parse(period);
         String start = yearMonth.atDay(1).atStartOfDay().toString();
         String end = yearMonth.plusMonths(1).atDay(1).atStartOfDay().toString();
+        return new PeriodRange(start, end);
+    }
 
-        List<ShiftAssignmentDocument> workedShifts = shiftAssignmentRepository.findByWorkerIdAndStartAtBetween(workerId, start, end).stream()
-                .filter(item -> item.getStatus() == ShiftAssignmentStatus.ASSIGNED || item.getStatus() == ShiftAssignmentStatus.WORKED)
-                .toList();
-        List<LeaveRequestDocument> absences = leaveRequestRepository.findByUserId(workerId).stream()
-                .filter(item -> "APPROVED".equals(item.getStatus().name()))
-                .filter(item -> item.getStartDate().startsWith(period) || item.getEndDate().startsWith(period))
-                .toList();
-        List<PayrollAdjustmentDocument> adjustments = payrollAdjustmentRepository.findByWorkerIdAndPeriod(workerId, period);
+    /**
+     * Obtiene los turnos realmente trabajados en el periodo.
+     */
+    private List<ShiftAssignmentDocument> getWorkedShifts(String workerId, PeriodRange range) {
+        List<ShiftAssignmentDocument> shifts = new ArrayList<>();
+        for (ShiftAssignmentDocument shift : shiftAssignmentRepository.findByWorkerIdAndStartAtBetween(workerId, range.start(), range.end())) {
+            if (shift.getStatus() == ShiftAssignmentStatus.ASSIGNED || shift.getStatus() == ShiftAssignmentStatus.WORKED) {
+                shifts.add(shift);
+            }
+        }
+        return shifts;
+    }
 
-        PayrollBreakdown breakdown = computeBreakdown(workedShifts, absences, contract);
-        double bonuses = adjustments.stream()
-                .filter(item -> item.getType() == PayrollAdjustmentType.BONUS)
-                .mapToDouble(PayrollAdjustmentDocument::getAmount)
-                .sum();
-        double penalties = adjustments.stream()
-                .filter(item -> item.getType() == PayrollAdjustmentType.PENALTY)
-                .mapToDouble(PayrollAdjustmentDocument::getAmount)
-                .sum();
+    /**
+     * Obtiene las ausencias aprobadas que afectan al periodo.
+     */
+    private List<LeaveRequestDocument> getApprovedAbsences(String workerId, String period) {
+        List<LeaveRequestDocument> absences = new ArrayList<>();
+        for (LeaveRequestDocument request : leaveRequestRepository.findByUserId(workerId)) {
+            boolean approved = "APPROVED".equals(request.getStatus().name());
+            boolean affectsPeriod = request.getStartDate().startsWith(period) || request.getEndDate().startsWith(period);
+            if (approved && affectsPeriod) {
+                absences.add(request);
+            }
+        }
+        return absences;
+    }
 
-        double grossSalary = breakdown.basePay + breakdown.nightBonus + breakdown.holidayBonus + breakdown.overtimePremium
-                + bonuses - penalties - breakdown.unpaidAbsenceDeduction;
+    /**
+     * Suma ajustes por tipo.
+     */
+    private double sumAdjustments(List<PayrollAdjustmentDocument> adjustments, PayrollAdjustmentType type) {
+        double total = 0;
+        for (PayrollAdjustmentDocument adjustment : adjustments) {
+            if (adjustment.getType() == type) {
+                total += adjustment.getAmount();
+            }
+        }
+        return total;
+    }
+
+    /**
+     * Prepara la nomina principal con todos sus totales.
+     */
+    private PayrollDocument buildPayroll(UserDocument worker,
+                                         String hospitalId,
+                                         String period,
+                                         PayrollBreakdown breakdown,
+                                         double bonuses,
+                                         double penalties) {
+        double grossSalary = breakdown.basePay
+                + breakdown.nightBonus
+                + breakdown.holidayBonus
+                + breakdown.overtimePremium
+                + bonuses
+                - penalties
+                - breakdown.unpaidAbsenceDeduction;
         double socialSecurity = round(grossSalary * 0.0635d);
         double incomeTax = round(grossSalary * 0.12d);
         double netSalary = round(grossSalary - socialSecurity - incomeTax);
 
-        PayrollDocument payroll = payrollRepository.findByWorkerId(workerId).stream()
-                .filter(item -> period.equals(item.getPeriod()))
-                .findFirst()
-                .orElse(PayrollDocument.builder().id(UUID.randomUUID().toString()).build());
-        payroll.setWorkerId(workerId);
+        PayrollDocument payroll = findExistingPayroll(worker.getId(), period);
+        payroll.setWorkerId(worker.getId());
         payroll.setWorkerFullName(worker.getFirstName() + " " + worker.getLastName());
         payroll.setHospitalId(hospitalId);
         payroll.setPeriod(period);
@@ -120,72 +228,55 @@ public class AdvancedPayrollService {
         payroll.setBonusAmount(round(breakdown.nightBonus + breakdown.holidayBonus + bonuses));
         payroll.setStatus(PayrollStatus.DRAFT);
         payroll.setIssuedAt(LocalDateTime.now().toString());
-        PayrollDocument savedPayroll = payrollRepository.save(payroll);
+        return payroll;
+    }
 
-        List<PayrollItemDocument> existingItems = payrollItemRepository.findByPayrollId(savedPayroll.getId());
+    /**
+     * Busca una nomina ya existente del periodo o crea una nueva base.
+     */
+    private PayrollDocument findExistingPayroll(String workerId, String period) {
+        for (PayrollDocument payroll : payrollRepository.findByWorkerId(workerId)) {
+            if (period.equals(payroll.getPeriod())) {
+                return payroll;
+            }
+        }
+        return PayrollDocument.builder().id(UUID.randomUUID().toString()).build();
+    }
+
+    /**
+     * Sustituye todas las lineas de detalle de una nomina.
+     */
+    private void replacePayrollItems(String payrollId,
+                                     String hospitalId,
+                                     String workerId,
+                                     WorkerContractDocument contract,
+                                     PayrollBreakdown breakdown,
+                                     double bonuses,
+                                     double penalties) {
+        List<PayrollItemDocument> existingItems = payrollItemRepository.findByPayrollId(payrollId);
         if (!existingItems.isEmpty()) {
             payrollItemRepository.deleteAll(existingItems);
         }
-        payrollItemRepository.saveAll(buildItems(savedPayroll.getId(), hospitalId, workerId, contract, breakdown, bonuses, penalties));
 
-        notificationService.createNotification(workerId, NotificationType.PAYROLL_GENERATED,
-                "Se ha generado la nomina del periodo " + period);
-        auditLogService.log(hospitalId, actorUserId, "PAYROLL_GENERATED", "payrolls", savedPayroll.getId(),
-                "Nomina generada para " + workerId + " en " + period);
-        return toDto(savedPayroll);
+        payrollItemRepository.saveAll(buildItems(payrollId, hospitalId, workerId, contract, breakdown, bonuses, penalties));
     }
 
-    public List<PayrollItemDto> getItems(String payrollId) {
-        return payrollItemRepository.findByPayrollId(payrollId).stream()
-                .map(document -> PayrollItemDto.builder()
-                        .id(document.getId())
-                        .payrollId(document.getPayrollId())
-                        .workerId(document.getWorkerId())
-                        .hospitalId(document.getHospitalId())
-                        .type(document.getType())
-                        .description(document.getDescription())
-                        .quantity(document.getQuantity())
-                        .unitAmount(document.getUnitAmount())
-                        .totalAmount(document.getTotalAmount())
-                        .build())
-                .collect(Collectors.toList());
-    }
-
-    public PayrollAdjustmentDto createAdjustment(PayrollAdjustmentDto dto) {
-        PayrollAdjustmentDocument saved = payrollAdjustmentRepository.save(PayrollAdjustmentDocument.builder()
-                .id(UUID.randomUUID().toString())
-                .hospitalId(dto.getHospitalId())
-                .workerId(dto.getWorkerId())
-                .period(dto.getPeriod())
-                .type(dto.getType())
-                .description(dto.getDescription())
-                .amount(dto.getAmount())
-                .createdBy(dto.getCreatedBy())
-                .createdAt(LocalDateTime.now().toString())
-                .build());
-        return PayrollAdjustmentDto.builder()
-                .id(saved.getId())
-                .hospitalId(saved.getHospitalId())
-                .workerId(saved.getWorkerId())
-                .period(saved.getPeriod())
-                .type(saved.getType())
-                .description(saved.getDescription())
-                .amount(saved.getAmount())
-                .createdBy(saved.getCreatedBy())
-                .createdAt(saved.getCreatedAt())
-                .build();
-    }
-
+    /**
+     * Calcula el desglose economico de la nomina.
+     */
     private PayrollBreakdown computeBreakdown(List<ShiftAssignmentDocument> workedShifts,
                                               List<LeaveRequestDocument> absences,
                                               WorkerContractDocument contract) {
         PayrollBreakdown breakdown = new PayrollBreakdown();
+
         for (ShiftAssignmentDocument shift : workedShifts) {
             LocalDateTime start = LocalDateTime.parse(shift.getStartAt());
             LocalDateTime end = LocalDateTime.parse(shift.getEndAt());
             double hours = Duration.between(start, end).toHours();
+
             breakdown.baseHours += hours;
             breakdown.basePay += hours * contract.getHourlyRate();
+
             if ("NIGHT".equalsIgnoreCase(shift.getShiftTypeCode())) {
                 breakdown.nightBonus += hours * contract.getHourlyRate() * contract.getNightBonusPct();
             }
@@ -199,11 +290,15 @@ public class AdvancedPayrollService {
             double overtimeHours = breakdown.baseHours - monthlyExpectedHours;
             breakdown.overtimePremium = overtimeHours * contract.getHourlyRate() * (contract.getOvertimeMultiplier() - 1.0d);
         }
+
         long unpaidDays = absences.stream().filter(item -> !item.isPaid()).count();
         breakdown.unpaidAbsenceDeduction = unpaidDays * 8.0d * contract.getHourlyRate();
         return breakdown;
     }
 
+    /**
+     * Construye todas las lineas de la nomina.
+     */
     private List<PayrollItemDocument> buildItems(String payrollId,
                                                  String hospitalId,
                                                  String workerId,
@@ -214,35 +309,65 @@ public class AdvancedPayrollService {
         List<PayrollItemDocument> items = new ArrayList<>();
         items.add(item(payrollId, hospitalId, workerId, PayrollItemType.BASE_HOURS, "Horas base",
                 breakdown.baseHours, contract.getHourlyRate(), round(breakdown.basePay)));
-        if (breakdown.nightBonus > 0) {
-            items.add(item(payrollId, hospitalId, workerId, PayrollItemType.NIGHT_BONUS, "Plus nocturnidad",
-                    1, round(breakdown.nightBonus), round(breakdown.nightBonus)));
-        }
-        if (breakdown.holidayBonus > 0) {
-            items.add(item(payrollId, hospitalId, workerId, PayrollItemType.HOLIDAY_BONUS, "Plus festivo o fin de semana",
-                    1, round(breakdown.holidayBonus), round(breakdown.holidayBonus)));
-        }
-        if (breakdown.overtimePremium > 0) {
-            items.add(item(payrollId, hospitalId, workerId, PayrollItemType.OVERTIME, "Horas extra",
-                    1, round(breakdown.overtimePremium), round(breakdown.overtimePremium)));
-        }
-        if (breakdown.unpaidAbsenceDeduction > 0) {
-            items.add(item(payrollId, hospitalId, workerId, PayrollItemType.UNPAID_ABSENCE, "Ausencias no remuneradas",
-                    1, -round(breakdown.unpaidAbsenceDeduction), -round(breakdown.unpaidAbsenceDeduction)));
-        }
-        if (bonuses > 0) {
-            items.add(item(payrollId, hospitalId, workerId, PayrollItemType.MANUAL_BONUS, "Bonificaciones manuales",
-                    1, round(bonuses), round(bonuses)));
-        }
-        if (penalties > 0) {
-            items.add(item(payrollId, hospitalId, workerId, PayrollItemType.MANUAL_PENALTY, "Penalizaciones manuales",
-                    1, -round(penalties), -round(penalties)));
-        }
+
+        addPositiveItem(items, payrollId, hospitalId, workerId, PayrollItemType.NIGHT_BONUS,
+                "Plus nocturnidad", breakdown.nightBonus);
+        addPositiveItem(items, payrollId, hospitalId, workerId, PayrollItemType.HOLIDAY_BONUS,
+                "Plus festivo o fin de semana", breakdown.holidayBonus);
+        addPositiveItem(items, payrollId, hospitalId, workerId, PayrollItemType.OVERTIME,
+                "Horas extra", breakdown.overtimePremium);
+        addNegativeItem(items, payrollId, hospitalId, workerId, PayrollItemType.UNPAID_ABSENCE,
+                "Ausencias no remuneradas", breakdown.unpaidAbsenceDeduction);
+        addPositiveItem(items, payrollId, hospitalId, workerId, PayrollItemType.MANUAL_BONUS,
+                "Bonificaciones manuales", bonuses);
+        addNegativeItem(items, payrollId, hospitalId, workerId, PayrollItemType.MANUAL_PENALTY,
+                "Penalizaciones manuales", penalties);
+
         return items;
     }
 
-    private PayrollItemDocument item(String payrollId, String hospitalId, String workerId, PayrollItemType type,
-                                     String description, double quantity, double unitAmount, double totalAmount) {
+    /**
+     * Agrega una linea positiva si el importe es mayor que cero.
+     */
+    private void addPositiveItem(List<PayrollItemDocument> items,
+                                 String payrollId,
+                                 String hospitalId,
+                                 String workerId,
+                                 PayrollItemType type,
+                                 String description,
+                                 double amount) {
+        if (amount > 0) {
+            items.add(item(payrollId, hospitalId, workerId, type, description, 1, round(amount), round(amount)));
+        }
+    }
+
+    /**
+     * Agrega una linea negativa si el importe es mayor que cero.
+     */
+    private void addNegativeItem(List<PayrollItemDocument> items,
+                                 String payrollId,
+                                 String hospitalId,
+                                 String workerId,
+                                 PayrollItemType type,
+                                 String description,
+                                 double amount) {
+        if (amount > 0) {
+            double rounded = round(amount);
+            items.add(item(payrollId, hospitalId, workerId, type, description, 1, -rounded, -rounded));
+        }
+    }
+
+    /**
+     * Crea una linea concreta de nomina.
+     */
+    private PayrollItemDocument item(String payrollId,
+                                     String hospitalId,
+                                     String workerId,
+                                     PayrollItemType type,
+                                     String description,
+                                     double quantity,
+                                     double unitAmount,
+                                     double totalAmount) {
         return PayrollItemDocument.builder()
                 .id(UUID.randomUUID().toString())
                 .payrollId(payrollId)
@@ -256,6 +381,9 @@ public class AdvancedPayrollService {
                 .build();
     }
 
+    /**
+     * Convierte la entidad de nomina a DTO.
+     */
     private PayrollDto toDto(PayrollDocument document) {
         return PayrollDto.builder()
                 .id(document.getId())
@@ -277,10 +405,56 @@ public class AdvancedPayrollService {
                 .build();
     }
 
+    /**
+     * Convierte una linea de nomina a DTO.
+     */
+    private PayrollItemDto toItemDto(PayrollItemDocument document) {
+        return PayrollItemDto.builder()
+                .id(document.getId())
+                .payrollId(document.getPayrollId())
+                .workerId(document.getWorkerId())
+                .hospitalId(document.getHospitalId())
+                .type(document.getType())
+                .description(document.getDescription())
+                .quantity(document.getQuantity())
+                .unitAmount(document.getUnitAmount())
+                .totalAmount(document.getTotalAmount())
+                .build();
+    }
+
+    /**
+     * Convierte un ajuste a DTO.
+     */
+    private PayrollAdjustmentDto toAdjustmentDto(PayrollAdjustmentDocument document) {
+        return PayrollAdjustmentDto.builder()
+                .id(document.getId())
+                .hospitalId(document.getHospitalId())
+                .workerId(document.getWorkerId())
+                .period(document.getPeriod())
+                .type(document.getType())
+                .description(document.getDescription())
+                .amount(document.getAmount())
+                .createdBy(document.getCreatedBy())
+                .createdAt(document.getCreatedAt())
+                .build();
+    }
+
+    /**
+     * Redondea un valor a dos decimales.
+     */
     private double round(double value) {
         return Math.round(value * 100.0d) / 100.0d;
     }
 
+    /**
+     * Record auxiliar para el rango de un periodo.
+     */
+    private record PeriodRange(String start, String end) {
+    }
+
+    /**
+     * Clase auxiliar con el desglose intermedio del calculo.
+     */
     private static class PayrollBreakdown {
         private double baseHours;
         private double basePay;

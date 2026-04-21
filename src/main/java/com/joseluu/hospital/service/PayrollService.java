@@ -10,9 +10,9 @@ import com.joseluu.hospital.repository.PayrollRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Servicio de gestion de nominas.
@@ -22,7 +22,8 @@ public class PayrollService {
     private final PayrollRepository payrollRepository;
     private final NotificationService notificationService;
 
-    public PayrollService(PayrollRepository payrollRepository, NotificationService notificationService) {
+    public PayrollService(PayrollRepository payrollRepository,
+                          NotificationService notificationService) {
         this.payrollRepository = payrollRepository;
         this.notificationService = notificationService;
     }
@@ -31,31 +32,33 @@ public class PayrollService {
      * Lista todas las nominas.
      */
     public List<PayrollDto> getAll() {
-        return payrollRepository.findAll().stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        List<PayrollDto> payrolls = new ArrayList<>();
+        for (PayrollDocument document : payrollRepository.findAll()) {
+            payrolls.add(toDto(document));
+        }
+        return payrolls;
     }
 
     /**
-     * Lista nominas asociadas a un trabajador.
+     * Lista las nominas de un trabajador.
      */
     public List<PayrollDto> getByWorker(String workerId) {
-        return payrollRepository.findByWorkerId(workerId).stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        List<PayrollDto> payrolls = new ArrayList<>();
+        for (PayrollDocument document : payrollRepository.findByWorkerId(workerId)) {
+            payrolls.add(toDto(document));
+        }
+        return payrolls;
     }
 
     /**
-     * Obtiene una nomina por id.
+     * Obtiene una nomina por identificador.
      */
     public PayrollDto getById(String id) {
-        return payrollRepository.findById(id)
-                .map(this::toDto)
-                .orElseThrow(() -> new NotFoundException("Nómina no encontrada"));
+        return toDto(requirePayroll(id));
     }
 
     /**
-     * Crea una nomina en estado borrador.
+     * Crea una nomina nueva en borrador.
      */
     public PayrollDto create(PayrollDto input) {
         PayrollDocument document = PayrollDocument.builder()
@@ -74,40 +77,58 @@ public class PayrollService {
                 .status(PayrollStatus.DRAFT)
                 .issuedAt(LocalDateTime.now().toString())
                 .build();
-        PayrollDto dto = toDto(payrollRepository.save(document));
-        if (dto.getStatus() == PayrollStatus.ISSUED) {
-            notificationService.createNotification(dto.getWorkerId(), NotificationType.PAYROLL_ISSUED, "Tu nómina de " + dto.getPeriod() + " ha sido emitida.");
-        }
-        return dto;
+
+        return toDto(payrollRepository.save(document));
     }
 
     /**
-     * Actualiza el estado de una nomina.
+     * Actualiza el estado de una nomina existente.
      */
     public PayrollDto updateStatus(String id, PayrollStatus status) {
         if (status == null) {
             throw new BadRequestException("El estado es obligatorio");
         }
-        PayrollDocument document = payrollRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Nómina no encontrada"));
+
+        PayrollDocument document = requirePayroll(id);
         document.setStatus(status);
+
         if (status == PayrollStatus.ACKNOWLEDGED) {
             document.setAcknowledgedAt(LocalDateTime.now().toString());
         }
-        PayrollDto dto = toDto(payrollRepository.save(document));
-        if (dto.getStatus() == PayrollStatus.ISSUED) {
-            notificationService.createNotification(dto.getWorkerId(), NotificationType.PAYROLL_ISSUED, "Tu nómina de " + dto.getPeriod() + " ha sido emitida.");
-        }
-        return dto;
+
+        PayrollDocument saved = payrollRepository.save(document);
+        notifyIfIssued(saved);
+        return toDto(saved);
     }
 
     /**
-     * Genera un PDF simple con la nomina.
+     * Genera un contenido PDF muy simple para descarga.
      */
     public byte[] generatePdf(String id) {
-        payrollRepository.findById(id).orElseThrow(() -> new NotFoundException("Nómina no encontrada"));
-        String text = "Nómina #" + id + " - " + LocalDateTime.now();
+        requirePayroll(id);
+        String text = "Nomina #" + id + " - " + LocalDateTime.now();
         return text.getBytes();
+    }
+
+    /**
+     * Lanza la notificacion cuando la nomina pasa a emitida.
+     */
+    private void notifyIfIssued(PayrollDocument document) {
+        if (document.getStatus() == PayrollStatus.ISSUED) {
+            notificationService.createNotification(
+                    document.getWorkerId(),
+                    NotificationType.PAYROLL_ISSUED,
+                    "Tu nomina de " + document.getPeriod() + " ha sido emitida."
+            );
+        }
+    }
+
+    /**
+     * Obtiene una nomina o lanza error.
+     */
+    private PayrollDocument requirePayroll(String id) {
+        return payrollRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Nomina no encontrada"));
     }
 
     /**

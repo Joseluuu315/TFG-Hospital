@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * Endpoints para demandas y asignaciones de turnos.
+ */
 @RestController
 public class SchedulingController {
     private final SchedulingService schedulingService;

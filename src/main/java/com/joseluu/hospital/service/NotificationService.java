@@ -1,4 +1,3 @@
-
 package com.joseluu.hospital.service;
 
 import com.joseluu.hospital.dto.NotificationDto;
@@ -8,25 +7,37 @@ import com.joseluu.hospital.entity.enums.NotificationType;
 import com.joseluu.hospital.entity.enums.UserRole;
 import com.joseluu.hospital.repository.NotificationRepository;
 import com.joseluu.hospital.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
+/**
+ * Servicio encargado de crear, listar y marcar notificaciones.
+ */
 @Service
-@RequiredArgsConstructor
 public class NotificationService {
-
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
 
+    public NotificationService(NotificationRepository notificationRepository,
+                               UserRepository userRepository) {
+        this.notificationRepository = notificationRepository;
+        this.userRepository = userRepository;
+    }
+
+    /**
+     * Crea una notificacion simple para un usuario.
+     */
     public void createNotification(String userId, NotificationType type, String message) {
         createNotification(userId, type, message, null);
     }
 
+    /**
+     * Crea una notificacion para un usuario con enlace opcional.
+     */
     public void createNotification(String userId, NotificationType type, String message, String link) {
         NotificationDocument notification = NotificationDocument.builder()
                 .id(UUID.randomUUID().toString())
@@ -37,33 +48,49 @@ public class NotificationService {
                 .read(false)
                 .createdAt(LocalDateTime.now().toString())
                 .build();
+
         notificationRepository.save(notification);
     }
 
+    /**
+     * Crea una notificacion para todos los usuarios de un rol.
+     */
     public void createNotificationForRole(UserRole role, NotificationType type, String message) {
         createNotificationForRole(role, type, message, null);
     }
 
+    /**
+     * Crea una notificacion para todos los usuarios de un rol con enlace opcional.
+     */
     public void createNotificationForRole(UserRole role, NotificationType type, String message, String link) {
-        List<UserDocument> users = userRepository.findByRole(role);
-        for (UserDocument user : users) {
+        for (UserDocument user : userRepository.findByRole(role)) {
             createNotification(user.getId(), type, message, link);
         }
     }
 
+    /**
+     * Crea una notificacion global para todos los usuarios.
+     */
     public void createGlobalNotification(NotificationType type, String message, String link) {
-        List<UserDocument> users = userRepository.findAll();
-        for (UserDocument user : users) {
+        for (UserDocument user : userRepository.findAll()) {
             createNotification(user.getId(), type, message, link);
         }
     }
 
+    /**
+     * Devuelve las notificaciones de un usuario ordenadas por fecha.
+     */
     public List<NotificationDto> getUserNotifications(String userId) {
-        return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        List<NotificationDto> notifications = new ArrayList<>();
+        for (NotificationDocument document : notificationRepository.findByUserIdOrderByCreatedAtDesc(userId)) {
+            notifications.add(toDto(document));
+        }
+        return notifications;
     }
 
+    /**
+     * Marca una notificacion como leida si existe.
+     */
     public void markAsRead(String notificationId) {
         notificationRepository.findById(notificationId).ifPresent(notification -> {
             notification.setRead(true);
@@ -71,6 +98,9 @@ public class NotificationService {
         });
     }
 
+    /**
+     * Convierte la entidad persistida a DTO.
+     */
     private NotificationDto toDto(NotificationDocument document) {
         return NotificationDto.builder()
                 .id(document.getId())

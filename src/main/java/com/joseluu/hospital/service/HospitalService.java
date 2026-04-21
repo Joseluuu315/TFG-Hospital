@@ -24,7 +24,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Servicio para gestionar hospitales y anuncios internos.
@@ -71,26 +70,27 @@ public class HospitalService {
      * Lista todos los hospitales.
      */
     public List<HospitalDto> getAll() {
-        return hospitalRepository.findAll().stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        List<HospitalDto> hospitals = new ArrayList<>();
+        for (HospitalDocument document : hospitalRepository.findAll()) {
+            hospitals.add(toDto(document));
+        }
+        return hospitals;
     }
 
     /**
      * Obtiene un hospital por id.
      */
     public HospitalDto getById(String id) {
-        return hospitalRepository.findById(id)
-                .map(this::toDto)
-                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
+        return toDto(requireHospital(id));
     }
 
     /**
-     * Crea un nuevo hospital con estado pendiente.
+     * Crea un hospital con configuracion inicial.
      */
     public HospitalDto create(CreateHospitalRequestDto request) {
         LocalDateTime now = LocalDateTime.now();
         String hospitalId = UUID.randomUUID().toString();
+
         HospitalDocument document = HospitalDocument.builder()
                 .id(hospitalId)
                 .name(request.getName())
@@ -103,13 +103,19 @@ public class HospitalService {
                 .createdAt(now.toString())
                 .updatedAt(now.toString())
                 .build();
-        HospitalDocument savedHospital = hospitalRepository.save(document);
 
+        HospitalDocument savedHospital = hospitalRepository.save(document);
         createAdminForHospital(savedHospital, request.getAdminEmail(), now);
         hospitalSettingsService.seedDefaults(savedHospital.getId());
         shiftTypeService.seedDefaults(savedHospital.getId());
-        auditLogService.log(savedHospital.getId(), null, "HOSPITAL_CREATED", "hospitals", savedHospital.getId(),
-                "Hospital creado con administrador inicial");
+        auditLogService.log(
+                savedHospital.getId(),
+                null,
+                "HOSPITAL_CREATED",
+                "hospitals",
+                savedHospital.getId(),
+                "Hospital creado con administrador inicial"
+        );
 
         return toDto(savedHospital);
     }
@@ -121,125 +127,96 @@ public class HospitalService {
         if (status == null) {
             throw new BadRequestException("El estado es obligatorio");
         }
-        HospitalDocument document = hospitalRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
+
+        HospitalDocument document = requireHospital(id);
         document.setStatus(status);
-        document.setUpdatedAt(LocalDateTime.now().toString());
-        return toDto(hospitalRepository.save(document));
+        saveHospital(document);
+        return toDto(document);
     }
 
     /**
-     * Actualiza los datos basicos de un hospital.
+     * Actualiza los datos generales de un hospital.
      */
     public HospitalDto update(String id, HospitalDto update) {
-        HospitalDocument document = hospitalRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
+        HospitalDocument document = requireHospital(id);
         document.setName(update.getName());
         document.setAddress(update.getAddress());
         document.setCity(update.getCity());
         document.setProvince(update.getProvince());
         document.setTaxId(update.getTaxId());
-        document.setUpdatedAt(LocalDateTime.now().toString());
-        return toDto(hospitalRepository.save(document));
+        saveHospital(document);
+        return toDto(document);
     }
 
     /**
-     * Elimina un hospital por id.
+     * Elimina un hospital y sus datos relacionados.
      */
     public void delete(String id) {
-        userRepository.findAll().stream()
-                .filter(user -> id.equals(user.getHospitalId()))
-                .forEach(user -> {
-                    leaveRequestRepository.findByUserId(user.getId()).forEach(request ->
-                            leaveRequestRepository.deleteById(request.getId()));
-                    payrollRepository.findByWorkerId(user.getId()).forEach(payroll ->
-                            payrollRepository.deleteById(payroll.getId()));
-                    userRepository.deleteById(user.getId());
-                });
-
-        workGroupRepository.findByHospitalId(id).forEach(group -> workGroupRepository.deleteById(group.getId()));
-        chatRepository.findAll().stream()
-                .filter(chat -> id.equals(chat.getHospitalId()))
-                .forEach(chat -> {
-                    chatMessageRepository.deleteByChatId(chat.getId());
-                    chatRepository.deleteById(chat.getId());
-                });
+        deleteUsersFromHospital(id);
+        deleteWorkGroupsFromHospital(id);
+        deleteChatsFromHospital(id);
         hospitalRepository.deleteById(id);
     }
 
     /**
-     * Agrega un anuncio al hospital.
+     * Agrega un anuncio a un hospital.
      */
     public AnnouncementDto addAnnouncement(String hospitalId, AnnouncementDto request, String authorId) {
-        HospitalDocument document = hospitalRepository.findById(hospitalId)
-                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
+        HospitalDocument document = requireHospital(hospitalId);
+        AnnouncementDocument announcement = buildAnnouncement(request, authorId);
 
-        List<AnnouncementDocument> announcements = document.getAnnouncements() == null
-                ? new ArrayList<>()
-                : new ArrayList<>(document.getAnnouncements());
-
-        AnnouncementDocument announcement = AnnouncementDocument.builder()
-                .id(UUID.randomUUID().toString())
-                .title(request.getTitle())
-                .content(request.getContent())
-                .priority(request.getPriority())
-                .authorId(authorId)
-                .publishedAt(LocalDateTime.now().toString())
-                .expiresAt(request.getExpiresAt())
-                .active(true)
-                .build();
-
+        List<AnnouncementDocument> announcements = getAnnouncements(document);
         announcements.add(0, announcement);
         document.setAnnouncements(announcements);
-        document.setUpdatedAt(LocalDateTime.now().toString());
-        hospitalRepository.save(document);
+        saveHospital(document);
 
-        List<UserDocument> workers = userRepository.findByRole(UserRole.WORKER).stream()
-                .filter(user -> user.getHospitalId().equals(hospitalId))
-                .toList();
-
-        for (UserDocument worker : workers) {
-            notificationService.createNotification(worker.getId(), NotificationType.NEW_ANNOUNCEMENT, "Nuevo anuncio: " + announcement.getTitle());
-        }
-
+        notifyWorkersAboutAnnouncement(hospitalId, announcement);
         return toAnnouncementDto(announcement);
     }
 
     /**
-     * Actualiza un anuncio existente.
+     * Actualiza un anuncio ya existente.
      */
     public AnnouncementDto updateAnnouncement(String hospitalId, String announcementId, AnnouncementDto request) {
-        HospitalDocument document = hospitalRepository.findById(hospitalId)
-                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
-
+        HospitalDocument document = requireHospital(hospitalId);
         AnnouncementDocument announcement = requireAnnouncement(document, announcementId);
+
         announcement.setTitle(request.getTitle());
         announcement.setContent(request.getContent());
         announcement.setPriority(request.getPriority());
         announcement.setExpiresAt(request.getExpiresAt());
         announcement.setActive(request.isActive());
-        document.setUpdatedAt(LocalDateTime.now().toString());
-        hospitalRepository.save(document);
+
+        saveHospital(document);
         return toAnnouncementDto(announcement);
     }
 
     /**
-     * Elimina un anuncio del hospital.
+     * Elimina un anuncio de un hospital.
      */
     public void deleteAnnouncement(String hospitalId, String announcementId) {
-        HospitalDocument document = hospitalRepository.findById(hospitalId)
-                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
-        // Evita NPE si announcements es null y estandariza la respuesta a 404.
-        requireAnnouncement(document, announcementId);
-        document.setAnnouncements(document.getAnnouncements().stream()
-                .filter(item -> !item.getId().equals(announcementId))
-                .collect(Collectors.toList()));
-        document.setUpdatedAt(LocalDateTime.now().toString());
-        hospitalRepository.save(document);
+        HospitalDocument document = requireHospital(hospitalId);
+        List<AnnouncementDocument> announcements = getAnnouncements(document);
+        boolean removed = false;
+
+        for (int i = 0; i < announcements.size(); i++) {
+            if (announcementId.equals(announcements.get(i).getId())) {
+                announcements.remove(i);
+                removed = true;
+                break;
+            }
+        }
+
+        if (!removed) {
+            throw new NotFoundException("Anuncio no encontrado");
+        }
+
+        document.setAnnouncements(announcements);
+        saveHospital(document);
     }
 
     /**
-     * Convierte un documento en DTO.
+     * Convierte la entidad de hospital a DTO.
      */
     private HospitalDto toDto(HospitalDocument document) {
         return HospitalDto.builder()
@@ -258,62 +235,64 @@ public class HospitalService {
     }
 
     /**
-     * Convierte anuncios embebidos a DTOs.
+     * Convierte una lista de anuncios embebidos a DTOs.
      */
     private List<AnnouncementDto> mapAnnouncements(List<AnnouncementDocument> documents) {
+        List<AnnouncementDto> announcements = new ArrayList<>();
         if (documents == null) {
-            return new ArrayList<>();
+            return announcements;
         }
-        return documents.stream()
-                .map(this::toAnnouncementDto)
-                .collect(Collectors.toList());
+
+        for (AnnouncementDocument document : documents) {
+            announcements.add(toAnnouncementDto(document));
+        }
+
+        return announcements;
     }
 
     /**
-     * Convierte un anuncio a su DTO.
+     * Convierte un anuncio a DTO.
      */
-    private AnnouncementDto toAnnouncementDto(AnnouncementDocument doc) {
+    private AnnouncementDto toAnnouncementDto(AnnouncementDocument document) {
         return AnnouncementDto.builder()
-                .id(doc.getId())
-                .title(doc.getTitle())
-                .content(doc.getContent())
-                .priority(doc.getPriority())
-                .authorId(doc.getAuthorId())
-                .publishedAt(doc.getPublishedAt())
-                .expiresAt(doc.getExpiresAt())
-                .active(doc.isActive())
+                .id(document.getId())
+                .title(document.getTitle())
+                .content(document.getContent())
+                .priority(document.getPriority())
+                .authorId(document.getAuthorId())
+                .publishedAt(document.getPublishedAt())
+                .expiresAt(document.getExpiresAt())
+                .active(document.isActive())
                 .build();
     }
 
     /**
-     * Obtiene el anuncio solicitado o lanza error.
+     * Busca un anuncio concreto dentro del hospital.
      */
-    private AnnouncementDocument requireAnnouncement(HospitalDocument document, String announcementId) {
-        if (document.getAnnouncements() == null) {
-            throw new NotFoundException("Anuncio no encontrado");
+    private AnnouncementDocument requireAnnouncement(HospitalDocument hospital, String announcementId) {
+        for (AnnouncementDocument announcement : getAnnouncements(hospital)) {
+            if (announcementId.equals(announcement.getId())) {
+                return announcement;
+            }
         }
-        return document.getAnnouncements().stream()
-                .filter(item -> item.getId().equals(announcementId))
-                .findFirst()
-                .orElseThrow(() -> new NotFoundException("Anuncio no encontrado"));
+        throw new NotFoundException("Anuncio no encontrado");
     }
 
     /**
-     * Crea el administrador inicial del hospital con credenciales por defecto.
+     * Crea el administrador inicial del hospital.
      */
     private void createAdminForHospital(HospitalDocument hospital, String adminEmail, LocalDateTime now) {
         if (adminEmail == null || adminEmail.isBlank()) {
             return;
         }
 
-        boolean alreadyExists = userRepository.findByEmailIgnoreCase(adminEmail).isPresent();
-        if (alreadyExists) {
+        if (userRepository.findByEmailIgnoreCase(adminEmail).isPresent()) {
             return;
         }
 
-        String[] parts = adminEmail.split("@")[0].split("[._-]");
-        String firstName = parts.length > 0 && !parts[0].isBlank() ? capitalize(parts[0]) : "Admin";
-        String lastName = parts.length > 1 && !parts[1].isBlank() ? capitalize(parts[1]) : hospital.getName();
+        String[] nameParts = getNameParts(adminEmail);
+        String firstName = buildAdminFirstName(nameParts);
+        String lastName = buildAdminLastName(nameParts, hospital.getName());
 
         UserDocument admin = UserDocument.builder()
                 .id(UUID.randomUUID().toString())
@@ -340,6 +319,132 @@ public class HospitalService {
         );
     }
 
+    /**
+     * Busca un hospital o lanza error.
+     */
+    private HospitalDocument requireHospital(String hospitalId) {
+        return hospitalRepository.findById(hospitalId)
+                .orElseThrow(() -> new NotFoundException("Hospital no encontrado"));
+    }
+
+    /**
+     * Guarda el hospital actualizando su fecha de modificacion.
+     */
+    private void saveHospital(HospitalDocument hospital) {
+        hospital.setUpdatedAt(LocalDateTime.now().toString());
+        hospitalRepository.save(hospital);
+    }
+
+    /**
+     * Elimina usuarios y sus datos dependientes del hospital.
+     */
+    private void deleteUsersFromHospital(String hospitalId) {
+        for (UserDocument user : userRepository.findAll()) {
+            if (!hospitalId.equals(user.getHospitalId())) {
+                continue;
+            }
+
+            leaveRequestRepository.findByUserId(user.getId())
+                    .forEach(request -> leaveRequestRepository.deleteById(request.getId()));
+            payrollRepository.findByWorkerId(user.getId())
+                    .forEach(payroll -> payrollRepository.deleteById(payroll.getId()));
+            userRepository.deleteById(user.getId());
+        }
+    }
+
+    /**
+     * Elimina los grupos de trabajo del hospital.
+     */
+    private void deleteWorkGroupsFromHospital(String hospitalId) {
+        workGroupRepository.findByHospitalId(hospitalId)
+                .forEach(group -> workGroupRepository.deleteById(group.getId()));
+    }
+
+    /**
+     * Elimina los chats del hospital y sus mensajes.
+     */
+    private void deleteChatsFromHospital(String hospitalId) {
+        chatRepository.findAll().forEach(chat -> {
+            if (!hospitalId.equals(chat.getHospitalId())) {
+                return;
+            }
+            chatMessageRepository.deleteByChatId(chat.getId());
+            chatRepository.deleteById(chat.getId());
+        });
+    }
+
+    /**
+     * Construye una entidad anuncio a partir del DTO.
+     */
+    private AnnouncementDocument buildAnnouncement(AnnouncementDto request, String authorId) {
+        return AnnouncementDocument.builder()
+                .id(UUID.randomUUID().toString())
+                .title(request.getTitle())
+                .content(request.getContent())
+                .priority(request.getPriority())
+                .authorId(authorId)
+                .publishedAt(LocalDateTime.now().toString())
+                .expiresAt(request.getExpiresAt())
+                .active(true)
+                .build();
+    }
+
+    /**
+     * Devuelve los anuncios del hospital o una lista vacia.
+     */
+    private List<AnnouncementDocument> getAnnouncements(HospitalDocument hospital) {
+        if (hospital.getAnnouncements() == null) {
+            return new ArrayList<>();
+        }
+        return new ArrayList<>(hospital.getAnnouncements());
+    }
+
+    /**
+     * Notifica a los trabajadores del hospital sobre un nuevo anuncio.
+     */
+    private void notifyWorkersAboutAnnouncement(String hospitalId, AnnouncementDocument announcement) {
+        for (UserDocument worker : userRepository.findByRole(UserRole.WORKER)) {
+            if (hospitalId.equals(worker.getHospitalId())) {
+                notificationService.createNotification(
+                        worker.getId(),
+                        NotificationType.NEW_ANNOUNCEMENT,
+                        "Nuevo anuncio: " + announcement.getTitle()
+                );
+            }
+        }
+    }
+
+    /**
+     * Extrae las partes del nombre a partir del email del administrador.
+     */
+    private String[] getNameParts(String adminEmail) {
+        String namePart = adminEmail.split("@")[0];
+        return namePart.split("[._-]");
+    }
+
+    /**
+     * Calcula el nombre del administrador inicial.
+     */
+    private String buildAdminFirstName(String[] nameParts) {
+        if (nameParts.length == 0 || nameParts[0].isBlank()) {
+            return "Admin";
+        }
+        return capitalize(nameParts[0]);
+    }
+
+    /**
+     * Calcula los apellidos del administrador inicial.
+     */
+    private String buildAdminLastName(String[] nameParts, String hospitalName) {
+        if (nameParts.length < 2 || nameParts[1].isBlank()) {
+            return hospitalName;
+        }
+        return capitalize(nameParts[1]);
+    }
+
+    /**
+     * Pone en mayuscula la primera letra de un texto.
+     */
     private String capitalize(String value) {
         if (value == null || value.isBlank()) {
             return "";

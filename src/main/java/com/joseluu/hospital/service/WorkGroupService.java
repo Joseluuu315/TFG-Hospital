@@ -17,7 +17,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Servicio para administrar grupos de trabajo y su chat asociado.
@@ -43,17 +42,19 @@ public class WorkGroupService {
         if (user.getHospitalId() == null) {
             return new ArrayList<>();
         }
-        return workGroupRepository.findByHospitalId(String.valueOf(user.getHospitalId())).stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+
+        List<WorkGroupDto> groups = new ArrayList<>();
+        for (WorkGroupDocument group : workGroupRepository.findByHospitalId(user.getHospitalId())) {
+            groups.add(toDto(group));
+        }
+        return groups;
     }
 
     /**
-     * Obtiene un grupo por id validando el hospital.
+     * Obtiene un grupo por id validando que pertenece al mismo hospital.
      */
     public WorkGroupDto getById(String id, UserDto user) {
-        WorkGroupDocument group = workGroupRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Grupo no encontrado"));
+        WorkGroupDocument group = requireGroup(id);
         validateHospitalScope(group, user);
         return toDto(group);
     }
@@ -62,27 +63,14 @@ public class WorkGroupService {
      * Crea un grupo de trabajo y su chat.
      */
     public WorkGroupDto create(CreateWorkGroupRequestDto request, UserDto user) {
-        if (user.getHospitalId() == null || user.getHospitalId().isBlank()) {
-            throw new BadRequestException("El usuario no tiene hospital asociado");
-        }
-        if (request == null || request.getName() == null || request.getName().isBlank()) {
-            throw new BadRequestException("El nombre del grupo es obligatorio");
-        }
+        validateCreateRequest(request, user);
 
         String hospitalId = user.getHospitalId();
-
-        List<String> members = new ArrayList<>(new LinkedHashSet<>(request.getMembers() == null ? List.of() : request.getMembers()));
-        if (!members.contains(user.getId())) {
-            members.add(0, user.getId());
-        }
-
+        List<String> members = normalizeMembers(user.getId(), request.getMembers());
         List<UserDocument> users = userRepository.findAllById(members);
-        String description = request.getDescription() == null || request.getDescription().isBlank()
-                ? "Grupo de trabajo coordinado por " + user.getNombre()
-                : request.getDescription();
-
-        String now = LocalDateTime.now().toString();
+        String description = resolveDescription(request.getDescription(), user);
         String name = request.getName().trim();
+        String now = LocalDateTime.now().toString();
 
         String chatId = chatService.createGroupChat(user.getId(), hospitalId, name, description, members).getId();
         WorkGroupDocument group = WorkGroupDocument.builder()
@@ -102,90 +90,85 @@ public class WorkGroupService {
     }
 
     /**
-     * Actualiza el grupo y sincroniza participantes en el chat.
+     * Actualiza nombre, descripcion y miembros del grupo.
      */
     public WorkGroupDto update(String id, CreateWorkGroupRequestDto request, UserDto user) {
-        WorkGroupDocument group = workGroupRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Grupo no encontrado"));
+        WorkGroupDocument group = requireGroup(id);
         validateHospitalScope(group, user);
-        if (request == null || request.getName() == null || request.getName().isBlank()) {
-            throw new BadRequestException("El nombre del grupo es obligatorio");
-        }
+        validateGroupName(request);
 
-        List<String> members = new ArrayList<>(new LinkedHashSet<>(request.getMembers() == null ? List.of() : request.getMembers()));
-        if (!members.contains(user.getId())) {
-            members.add(0, user.getId());
-        }
+        List<String> members = normalizeMembers(user.getId(), request.getMembers());
         List<UserDocument> users = userRepository.findAllById(members);
 
         group.setName(request.getName().trim());
-        group.setDescription(request.getDescription() == null || request.getDescription().isBlank()
-                ? group.getDescription()
-                : request.getDescription());
+        group.setDescription(resolveUpdatedDescription(group.getDescription(), request.getDescription()));
         group.setMembers(members);
         group.setMemberNames(mapNames(members, users));
         group.setUpdatedAt(LocalDateTime.now().toString());
 
-        chatService.updateGroupParticipants(group.getChatId(), group.getMembers());
-
+        chatService.updateGroupParticipants(group.getChatId(), members);
         return toDto(workGroupRepository.save(group));
     }
 
     /**
-     * Elimina un grupo y su chat.
+     * Elimina un grupo y su chat asociado.
      */
     public void delete(String id, UserDto user) {
-        WorkGroupDocument group = workGroupRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Grupo no encontrado"));
+        WorkGroupDocument group = requireGroup(id);
         validateHospitalScope(group, user);
         chatService.deleteChat(group.getChatId());
         workGroupRepository.deleteById(id);
     }
 
     /**
-     * Agrega un miembro al grupo y actualiza el chat.
+     * Agrega un miembro al grupo.
      */
     public WorkGroupDto addMember(String id, String userId, UserDto currentUser) {
-        WorkGroupDocument group = workGroupRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Grupo no encontrado"));
+        WorkGroupDocument group = requireGroup(id);
         validateHospitalScope(group, currentUser);
 
-        if (group.getMembers() == null) {
-            group.setMembers(new ArrayList<>());
+        List<String> members = group.getMembers() == null ? new ArrayList<>() : new ArrayList<>(group.getMembers());
+        if (!members.contains(userId)) {
+            members.add(userId);
         }
-        if (!group.getMembers().contains(userId)) {
-            group.getMembers().add(userId);
-        }
-        List<UserDocument> users = userRepository.findAllById(group.getMembers());
-        group.setMemberNames(mapNames(group.getMembers(), users));
-        group.setUpdatedAt(LocalDateTime.now().toString());
-        chatService.updateGroupParticipants(group.getChatId(), group.getMembers());
-        return toDto(workGroupRepository.save(group));
+
+        return saveMembers(group, members);
     }
 
     /**
-     * Elimina un miembro del grupo y actualiza el chat.
+     * Elimina un miembro del grupo.
      */
     public WorkGroupDto removeMember(String id, String userId, UserDto currentUser) {
-        WorkGroupDocument group = workGroupRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Grupo no encontrado"));
+        WorkGroupDocument group = requireGroup(id);
         validateHospitalScope(group, currentUser);
 
-        if (group.getMembers() == null) {
-            group.setMembers(new ArrayList<>());
+        List<String> members = new ArrayList<>();
+        if (group.getMembers() != null) {
+            for (String memberId : group.getMembers()) {
+                if (!memberId.equals(userId)) {
+                    members.add(memberId);
+                }
+            }
         }
-        group.setMembers(group.getMembers().stream()
-                .filter(memberId -> !memberId.equals(userId))
-                .collect(Collectors.toList()));
-        List<UserDocument> users = userRepository.findAllById(group.getMembers());
-        group.setMemberNames(mapNames(group.getMembers(), users));
+
+        return saveMembers(group, members);
+    }
+
+    /**
+     * Guarda una nueva lista de miembros y sincroniza el chat.
+     */
+    private WorkGroupDto saveMembers(WorkGroupDocument group, List<String> members) {
+        List<UserDocument> users = userRepository.findAllById(members);
+        group.setMembers(members);
+        group.setMemberNames(mapNames(members, users));
         group.setUpdatedAt(LocalDateTime.now().toString());
-        chatService.updateGroupParticipants(group.getChatId(), group.getMembers());
+
+        chatService.updateGroupParticipants(group.getChatId(), members);
         return toDto(workGroupRepository.save(group));
     }
 
     /**
-     * Valida que el grupo pertenece al mismo hospital que el usuario.
+     * Valida el alcance del hospital.
      */
     private void validateHospitalScope(WorkGroupDocument group, UserDto user) {
         if (user.getHospitalId() == null || !group.getHospitalId().equals(user.getHospitalId())) {
@@ -194,16 +177,84 @@ public class WorkGroupService {
     }
 
     /**
-     * Obtiene los nombres completos de los miembros.
+     * Valida la informacion minima para crear un grupo.
+     */
+    private void validateCreateRequest(CreateWorkGroupRequestDto request, UserDto user) {
+        if (user.getHospitalId() == null || user.getHospitalId().isBlank()) {
+            throw new BadRequestException("El usuario no tiene hospital asociado");
+        }
+        validateGroupName(request);
+    }
+
+    /**
+     * Valida que el grupo tenga nombre.
+     */
+    private void validateGroupName(CreateWorkGroupRequestDto request) {
+        if (request == null || request.getName() == null || request.getName().isBlank()) {
+            throw new BadRequestException("El nombre del grupo es obligatorio");
+        }
+    }
+
+    /**
+     * Obtiene el grupo o lanza error.
+     */
+    private WorkGroupDocument requireGroup(String id) {
+        return workGroupRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Grupo no encontrado"));
+    }
+
+    /**
+     * Quita duplicados y garantiza que el creador este incluido.
+     */
+    private List<String> normalizeMembers(String currentUserId, List<String> requestedMembers) {
+        List<String> members = new ArrayList<>(new LinkedHashSet<>(requestedMembers == null ? List.of() : requestedMembers));
+        if (!members.contains(currentUserId)) {
+            members.add(0, currentUserId);
+        }
+        return members;
+    }
+
+    /**
+     * Resuelve la descripcion inicial del grupo.
+     */
+    private String resolveDescription(String description, UserDto user) {
+        if (description == null || description.isBlank()) {
+            return "Grupo de trabajo coordinado por " + user.getNombre();
+        }
+        return description;
+    }
+
+    /**
+     * Resuelve la descripcion tras una actualizacion.
+     */
+    private String resolveUpdatedDescription(String currentDescription, String newDescription) {
+        if (newDescription == null || newDescription.isBlank()) {
+            return currentDescription;
+        }
+        return newDescription;
+    }
+
+    /**
+     * Construye los nombres completos de los miembros.
      */
     private List<String> mapNames(List<String> memberIds, List<UserDocument> users) {
-        return memberIds.stream()
-                .map(memberId -> users.stream()
-                        .filter(user -> user.getId().equals(memberId))
-                        .findFirst()
-                        .map(user -> user.getFirstName() + " " + user.getLastName())
-                        .orElse("Usuario"))
-                .collect(Collectors.toList());
+        List<String> names = new ArrayList<>();
+        for (String memberId : memberIds) {
+            names.add(findUserName(memberId, users));
+        }
+        return names;
+    }
+
+    /**
+     * Busca el nombre visible de un usuario.
+     */
+    private String findUserName(String memberId, List<UserDocument> users) {
+        for (UserDocument user : users) {
+            if (user.getId().equals(memberId)) {
+                return user.getFirstName() + " " + user.getLastName();
+            }
+        }
+        return "Usuario";
     }
 
     /**

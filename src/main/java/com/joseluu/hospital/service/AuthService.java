@@ -31,83 +31,61 @@ public class AuthService {
     }
 
     /**
-     * Valida credenciales y crea una sesion.
+     * Valida credenciales y crea una nueva sesion.
      */
     public AuthResponseDto login(LoginRequestDto request) {
-        if (request == null || request.getEmail() == null || request.getPassword() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email y password son obligatorios");
-        }
+        validateLoginRequest(request);
 
-        UserDocument userDocument;
-        try {
-            // Intentamos buscar el usuario
-            userDocument = userRepository.findByEmailIgnoreCase(request.getEmail())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciales invalidas"));
-
-        } catch (IncorrectResultSizeDataAccessException e) {
-            // Si entra aquí, es porque hay más de un usuario con el mismo email
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Error de integridad: Existen múltiples cuentas con este email. Contacte con soporte."
-            );
-        }
-
-        if (!userDocument.getPassword().equals(request.getPassword())) {
+        UserDocument userDocument = findUserByEmail(request.getEmail());
+        if (!request.getPassword().equals(userDocument.getPassword())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciales invalidas");
         }
 
-        UserDto user = userService.findById(userDocument.getId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario no encontrado"));
-
-        return createSession(user);
+        return createSession(loadUser(userDocument.getId()));
     }
 
     /**
-     * Renueva tokens usando el refresh token.
+     * Renueva los tokens a partir del refresh token.
      */
     public AuthResponseDto refresh(RefreshTokenRequestDto request) {
-        if (request == null || request.getRefreshToken() == null) {
+        if (request == null || request.getRefreshToken() == null || request.getRefreshToken().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Refresh token requerido");
         }
-        AuthSession session = sessionsByRefreshToken.get(request.getRefreshToken());
-        if (session == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token invalido");
-        }
-        return createSession(session.user());
+
+        AuthSession session = requireSessionByRefreshToken(request.getRefreshToken());
+        return createSession(session.getUser());
     }
 
     /**
-     * Invalida los tokens asociados al bearer.
+     * Cierra la sesion asociada al bearer token.
      */
     public void logout(String bearer) {
         String token = extractToken(bearer);
         AuthSession session = sessionsByAccessToken.remove(token);
         if (session != null) {
-            sessionsByRefreshToken.remove(session.refreshToken());
+            sessionsByRefreshToken.remove(session.getRefreshToken());
         }
     }
 
     /**
-     * Obtiene el usuario autenticado a partir del bearer token.
+     * Devuelve el usuario autenticado asociado al bearer token.
      */
     public UserDto getUserFromBearer(String bearer) {
         String token = extractToken(bearer);
-        AuthSession session = sessionsByAccessToken.get(token);
-        if (session == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token no valido");
-        }
-        return session.user();
+        return requireSessionByAccessToken(token).getUser();
     }
 
     /**
-     * Crea una nueva sesion con tokens aleatorios.
+     * Crea y guarda una sesion con tokens aleatorios.
      */
     private AuthResponseDto createSession(UserDto user) {
         String accessToken = UUID.randomUUID().toString();
         String refreshToken = UUID.randomUUID().toString();
         AuthSession session = new AuthSession(accessToken, refreshToken, user);
+
         sessionsByAccessToken.put(accessToken, session);
         sessionsByRefreshToken.put(refreshToken, session);
+
         return AuthResponseDto.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
@@ -116,18 +94,101 @@ public class AuthService {
     }
 
     /**
-     * Extrae el token desde la cabecera Authorization.
+     * Extrae el token real de la cabecera Authorization.
      */
     private String extractToken(String bearer) {
         if (bearer == null || !bearer.startsWith("Bearer ")) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Cabecera Authorization requerida");
         }
+
         String token = bearer.substring(7).trim();
         if (token.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token no valido");
         }
+
         return token;
     }
 
-    private record AuthSession(String accessToken, String refreshToken, UserDto user) {}
+    /**
+     * Comprueba que la peticion de login trae email y password.
+     */
+    private void validateLoginRequest(LoginRequestDto request) {
+        if (request == null || request.getEmail() == null || request.getPassword() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email y password son obligatorios");
+        }
+    }
+
+    /**
+     * Busca un usuario por email controlando conflictos de integridad.
+     */
+    private UserDocument findUserByEmail(String email) {
+        try {
+            return userRepository.findByEmailIgnoreCase(email)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciales invalidas"));
+        } catch (IncorrectResultSizeDataAccessException exception) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Error de integridad: Existen multiples cuentas con este email. Contacte con soporte."
+            );
+        }
+    }
+
+    /**
+     * Carga el usuario de sesion en formato DTO.
+     */
+    private UserDto loadUser(String userId) {
+        return userService.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario no encontrado"));
+    }
+
+    /**
+     * Obtiene una sesion por access token o lanza error.
+     */
+    private AuthSession requireSessionByAccessToken(String accessToken) {
+        AuthSession session = sessionsByAccessToken.get(accessToken);
+        if (session == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token no valido");
+        }
+        return session;
+    }
+
+    /**
+     * Obtiene una sesion por refresh token o lanza error.
+     */
+    private AuthSession requireSessionByRefreshToken(String refreshToken) {
+        AuthSession session = sessionsByRefreshToken.get(refreshToken);
+        if (session == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token invalido");
+        }
+        return session;
+    }
+
+    private static class AuthSession {
+        private final String accessToken;
+        private final String refreshToken;
+        private final UserDto user;
+
+        /**
+         * Crea una sesion en memoria.
+         */
+        private AuthSession(String accessToken, String refreshToken, UserDto user) {
+            this.accessToken = accessToken;
+            this.refreshToken = refreshToken;
+            this.user = user;
+        }
+
+        /**
+         * Devuelve el refresh token de la sesion.
+         */
+        public String getRefreshToken() {
+            return refreshToken;
+        }
+
+        /**
+         * Devuelve el usuario asociado a la sesion.
+         */
+        public UserDto getUser() {
+            return user;
+        }
+    }
 }
