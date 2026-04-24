@@ -1,66 +1,48 @@
 # Back-end (API REST)
 
-![Java](https://img.shields.io/badge/Java-17-blue.svg) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.2-brightgreen.svg) ![MongoDB](https://img.shields.io/badge/MongoDB-blue.svg)
+## Objetivo
 
-## Descripción
+Este backend usa Spring Boot y MongoDB. La idea es mantenerlo con un estilo facil de leer y facil de explicar para alumnado de 2 de DAM.
 
-Este directorio contiene el código fuente del back-end para el proyecto **TFG-Hospital**. Se trata de una API RESTful desarrollada con **Spring Boot** que se encarga de toda la lógica de negocio, la seguridad y la persistencia de datos.
+## Estructura basica
 
-## Tecnologías Utilizadas
+- `controller`: recibe la peticion HTTP.
+- `service`: aplica la logica de negocio.
+- `repository`: accede a MongoDB.
+- `entity`: representa lo que se guarda en base de datos.
+- `dto`: define los datos que entran y salen por la API.
+- `error` y `exception`: centralizan la gestion de errores.
 
-- **Lenguaje**: Java 17
-- **Framework**: Spring Boot 4.0.2
-- **Módulos de Spring**:
-  - `spring-boot-starter-data-mongodb`: para la integración con la base de datos NoSQL MongoDB.
-  - `spring-boot-starter-webmvc`: para la creación de controladores REST.
-  - `spring-security-crypto`: para el hash de contraseñas y otras operaciones de seguridad.
-- **Base de Datos**: MongoDB
-- **Herramientas**:
-  - **Lombok**: para reducir el código repetitivo (boilerplate).
-  - **Gradle**: como gestor de dependencias y para la construcción del proyecto.
+## Como seguir el codigo
 
-## Prerrequisitos
+1. Empieza por un controlador, por ejemplo `UsersController`.
+2. Sigue el metodo del servicio que usa ese controlador.
+3. Mira el repositorio que consulta el servicio.
+4. Revisa el DTO de entrada o salida para entender los datos.
 
-- JDK 17 o superior.
-- Una instancia de MongoDB en ejecución.
-- Gradle (el wrapper `gradlew` está incluido en el repositorio).
+## Tecnologias
 
-## Configuración
+- Java 17
+- Spring Boot
+- Spring Web MVC
+- Spring Data MongoDB
+- Lombok
+- Gradle
 
-1.  **Clonar el repositorio**:
-    ```bash
-    git clone https://github.com/tu-usuario/TFG-Hospital.git
-    cd TFG-Hospital
-    ```
+## Criterios de codigo
 
-2.  **Configurar la base de datos**:
-    Abre el archivo `src/main/resources/application.properties` (o `application.yml`) y asegúrate de que la URI de conexión a tu base de datos MongoDB es correcta:
-    ```properties
-    spring.data.mongodb.uri=mongodb://localhost:27017/hospital_db
-    ```
+- Metodos cortos.
+- Nombres claros.
+- Logica separada en pasos pequenos.
+- Menos saturacion en cada clase.
+- Sin cambiar el contrato actual del frontend.
 
-## Instalación y Ejecución
+## Ejecucion
 
-1.  **Construir el proyecto**:
-    Desde la raíz del proyecto (`TFG-Hospital`), ejecuta el siguiente comando para compilar el código y descargar las dependencias.
-    ```bash
-    ./gradlew build
-    ```
+Con MongoDB arrancado y desde la raiz del proyecto:
 
-2.  **Ejecutar la aplicación**:
-    Puedes iniciar la aplicación usando el plugin de Spring Boot para Gradle:
-    ```bash
-    ./gradlew bootRun
-    ```
-    La API estará disponible en `http://localhost:8080`.
+```bash
+./gradlew bootRun
+```
 
-## Endpoints de la API
-
-A continuación se describen algunos de los endpoints principales (puedes añadir más detalles aquí):
-
-- `GET /api/patients`: Obtiene una lista de todos los pacientes.
-- `POST /api/patients`: Crea un nuevo paciente.
-- `GET /api/appointments`: Obtiene una lista de todas las citas.
-- `POST /api/appointments`: Crea una nueva cita.
-- `GET /api/doctors`: Obtiene una lista de todos los médicos.
-- `POST /api/doctors`: Crea un nuevo médico
+La API arranca por defecto en `http://localhost:8080`.
