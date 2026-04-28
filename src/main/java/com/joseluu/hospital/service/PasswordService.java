@@ -11,7 +11,7 @@ import java.security.SecureRandom;
 @Service
 public class PasswordService {
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
-    private static final String ALLOWED_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+    private static final String ALLOWED_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%_";
     private final SecureRandom secureRandom = new SecureRandom();
 
     /**
