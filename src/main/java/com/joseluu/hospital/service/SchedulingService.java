@@ -395,7 +395,7 @@ public class SchedulingService {
     }
 
     /**
-     * Anade cualquier trabajador libre restante.
+     * Añade cualquier trabajador libre restante.
      */
     private void addAnyFreeWorkerCandidates(List<UserDocument> target,
                                             List<UserDocument> baseCandidates,
