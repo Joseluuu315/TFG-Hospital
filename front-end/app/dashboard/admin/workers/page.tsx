@@ -111,6 +111,7 @@ export default function WorkersPage() {
   const [contractWorker, setContractWorker] = useState<User | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingContract, setIsSavingContract] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
   const [formData, setFormData] = useState<WorkerFormData>(initialFormData);
   const [contractForm, setContractForm] = useState<ContractFormData>(initialContractForm);
 
@@ -161,12 +162,14 @@ export default function WorkersPage() {
   const closeCreateDialog = () => {
     setIsCreateDialogOpen(false);
     resetForm();
+    setPasswordError('');
   };
 
   const closeEditDialog = () => {
     setIsEditDialogOpen(false);
     setEditingWorker(null);
     resetForm();
+    setPasswordError('');
   };
 
   const closeContractDialog = () => {
@@ -312,6 +315,29 @@ export default function WorkersPage() {
     return matchesSearch && matchesDepartment;
   });
 
+
+  const handlePasswordChange = (value: string, isEditMode: boolean) => {
+    updateForm('password', value);
+
+    if (isEditMode && value === '') {
+      setPasswordError('');
+      return;
+    }
+
+    const hasMinLength = value.length >= 10;
+    const hasUppercase = /[A-Z]/.test(value);
+    const hasNumber = /[0-9]/.test(value);
+    const hasSpecial = /[!@#$%^&*]/.test(value);
+
+    const errors: string[] = [];
+    if (!hasMinLength) errors.push('mínimo 10 caracteres');
+    if (!hasUppercase) errors.push('una mayúscula');
+    if (!hasNumber) errors.push('un número');
+    if (!hasSpecial) errors.push('un símbolo especial (!@#$%^&*)');
+
+    setPasswordError(errors.length > 0 ? `Faltan: ${errors.join(', ')}.` : '');
+  };
+
   const renderWorkerFormFields = (isEditMode: boolean) => (
     <FieldGroup className="py-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -375,15 +401,30 @@ export default function WorkersPage() {
         <Input id="baseSalary" type="number" value={formData.baseSalary} onChange={(event) => updateForm('baseSalary', event.target.value)} required />
       </Field>
       <Field>
-        <FieldLabel htmlFor="password">Contrasena inicial</FieldLabel>
-        <Input
-          id="password"
-          type="password"
-          value={formData.password}
-          onChange={(event) => updateForm('password', event.target.value)}
-          placeholder={isEditMode ? 'Dejar en blanco si no cambia' : 'Minimo 8 caracteres'}
-          required={!isEditMode}
-        />
+        <div>
+          <FieldLabel htmlFor="password">Contraseña inicial</FieldLabel>
+          <Input
+              id="password"
+              type="password"
+              value={formData.password}
+              onChange={(event) => handlePasswordChange(event.target.value, isEditMode)}
+              placeholder={
+                isEditMode
+                    ? 'Dejar en blanco si no cambia'
+                    : 'Mínimo 10 caracteres, mayúscula, número y símbolo'
+              }
+              required={!isEditMode}
+              className={passwordError ? 'border-red-500 focus-visible:ring-red-500' : ''}
+          />
+
+
+          {/* Feedback visual para el usuario */}
+          {passwordError && (
+              <p style={{ color: 'red', fontSize: '12px', marginTop: '5px' }}>
+                {passwordError}
+              </p>
+          )}
+        </div>
       </Field>
     </FieldGroup>
   );
@@ -433,7 +474,7 @@ export default function WorkersPage() {
                 <Button type="button" variant="outline" onClick={closeCreateDialog}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
+                <Button type="submit" disabled={isSubmitting || !!passwordError}>
                   {isSubmitting ? <><Spinner className="mr-2" /> Creando...</> : 'Contratar'}
                 </Button>
               </DialogFooter>
