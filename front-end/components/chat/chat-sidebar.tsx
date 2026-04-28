@@ -142,10 +142,10 @@ export function ChatSidebar({
                   const statusText = chat.type === 'PRIVATE'
                     ? peer
                       ? presenceByUserId[peer.id]?.isOnline
-                        ? 'Online'
+                        ? 'Activo'
                         : formatLastSeen(presenceByUserId[peer.id]?.lastSeenAt)
                       : 'Sin datos'
-                    : `${onlineParticipants} online`;
+                    : `${onlineParticipants} activos`;
 
                   return (
                     <SidebarUser
@@ -189,7 +189,7 @@ export function ChatSidebar({
 }
 
 function formatLastSeen(lastSeenAt?: string | null) {
-  if (!lastSeenAt) return 'Offline';
+  if (!lastSeenAt) return 'Sin actividad';
   const lastSeenDate = new Date(lastSeenAt);
   const minutes = Math.max(1, Math.round((Date.now() - lastSeenDate.getTime()) / 60000));
   if (minutes < 2) return 'Hace un momento';

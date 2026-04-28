@@ -78,7 +78,6 @@ export default function AdminDashboard() {
         setWorkers(workersRes.data.filter((user) => user.role === 'WORKER'));
         setPendingRequests(requestsRes.data);
       } catch {
-        console.log('[averonix] Backend no disponible, usando datos de ejemplo');
         setWorkers(mockWorkers);
         setPendingRequests(mockLeaveRequests);
       } finally {

@@ -42,7 +42,6 @@ export default function WorkerLeaveRequestsPage() {
       const response = await usersApi.getMyLeaveRequests();
       setLeaveRequests(response.data);
     } catch {
-      console.log('[averonix] Backend no disponible, usando datos de ejemplo');
       setLeaveRequests(mockLeaveRequests);
     } finally {
       setIsLoading(false);

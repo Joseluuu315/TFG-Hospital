@@ -156,11 +156,11 @@ export function NewChatDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-md">
           <DialogHeader className="border-b border-slate-100 px-5 py-4">
-            <DialogTitle className="text-base font-semibold text-slate-800">Nueva conversación</DialogTitle>
+            <DialogTitle className="text-base font-semibold text-slate-800">Nueva conversacion</DialogTitle>
             <DialogDescription className="text-xs text-slate-400">
               {isAdmin
                   ? 'Inicia un chat privado o crea un grupo de trabajo'
-                  : 'Selecciona un compañero para iniciar una conversación'}
+                  : 'Selecciona un companero para iniciar una conversacion'}
             </DialogDescription>
           </DialogHeader>
 

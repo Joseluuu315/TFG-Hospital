@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ChevronLeft, MessageCircle, Users, Settings, Plus, Trash2, Zap } from 'lucide-react';
+import { ChevronLeft, MessageCircle, Users, Settings, Plus, Trash2 } from 'lucide-react';
 import { chatApi, usersApi, workGroupsApi, type Chat, type ChatMessage, type User, type WorkGroup } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -214,7 +214,7 @@ export default function AdminChatPage() {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="flex h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.8)]" />
-                <span className="text-xs font-medium uppercase tracking-widest text-cyan-300">Centro de coordinación</span>
+                <span className="text-xs font-medium uppercase tracking-widest text-cyan-300">Mensajeria interna</span>
               </div>
               <h1 className="text-xl font-semibold tracking-tight">Comunicaciones del hospital</h1>
             </div>
@@ -280,12 +280,12 @@ export default function AdminChatPage() {
                         <MessageCircle className="h-7 w-7" />
                       </div>
                       <div className="text-center">
-                        <p className="font-medium text-slate-600">Selecciona una conversación</p>
+                        <p className="font-medium text-slate-600">Selecciona una conversacion</p>
                         <p className="text-sm">Elige un chat de la lista o crea uno nuevo</p>
                       </div>
                       <Button size="sm" variant="outline" onClick={() => setShowNewChatDialog(true)}>
                         <Plus className="mr-2 h-3.5 w-3.5" />
-                        Nueva conversación
+                        Nueva conversacion
                       </Button>
                     </div>
                 )}
@@ -297,7 +297,7 @@ export default function AdminChatPage() {
           <TabsContent value="groups" className="mt-4 space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                {workGroups.length} grupo{workGroups.length !== 1 ? 's' : ''} — los miembros y chats se sincronizan automáticamente
+                {workGroups.length} grupo{workGroups.length !== 1 ? 's' : ''} - miembros y chats vinculados
               </p>
               <Button size="sm" onClick={() => setShowNewChatDialog(true)} className="rounded-xl">
                 <Plus className="mr-2 h-3.5 w-3.5" />
@@ -308,7 +308,7 @@ export default function AdminChatPage() {
             {workGroups.length === 0 ? (
                 <div className="flex h-48 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-200 text-slate-400">
                   <Users className="h-8 w-8" />
-                  <p className="text-sm">No hay grupos creados todavía</p>
+                  <p className="text-sm">No hay grupos creados todavia</p>
                   <Button size="sm" variant="outline" onClick={() => setShowNewChatDialog(true)}>Crear primer grupo</Button>
                 </div>
             ) : (

@@ -99,7 +99,7 @@ export default function WorkerDashboard() {
           setAnnouncements(hospitalRes.data.announcements || fallbackAnnouncements);
         }
       } catch (error) {
-        console.log('[averonix] Error cargando datos:', error);
+        console.error('Error cargando datos del panel del trabajador:', error);
       } finally {
         setIsLoading(false);
       }

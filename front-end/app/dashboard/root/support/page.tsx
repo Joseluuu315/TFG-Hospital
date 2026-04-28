@@ -101,11 +101,11 @@ export default function RootSupportPage() {
                 <span className="text-xs font-medium uppercase tracking-widest text-emerald-300">Sede central</span>
               </div>
               <h1 className="text-xl font-semibold">Soporte hospitalario</h1>
-              <p className="text-sm text-slate-400">Refresco automático cada 4 segundos</p>
+              <p className="text-sm text-slate-400">Actualizacion cada 4 segundos</p>
             </div>
             <Badge className="rounded-full border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-emerald-300 hover:bg-emerald-500/20">
               <Wifi className="mr-1.5 h-3 w-3" />
-              En tiempo real
+              Canales activos
             </Badge>
           </div>
         </div>

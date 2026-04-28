@@ -99,7 +99,6 @@ export default function HospitalsPage() {
       const response = await hospitalsApi.getAll();
       setHospitals(response.data);
     } catch {
-      console.log('[averonix] Backend no disponible, usando datos de ejemplo');
       setHospitals(mockHospitals);
     } finally {
       setIsLoading(false);

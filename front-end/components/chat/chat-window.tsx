@@ -74,10 +74,10 @@ export function ChatWindow({
   const statusText = chat.type === 'PRIVATE'
     ? peer
       ? presenceByUserId[peer.id]?.isOnline
-        ? 'Online ahora'
+        ? 'Activo ahora'
         : formatPresenceLabel(presenceByUserId[peer.id]?.lastSeenAt)
-      : 'Sin presencia'
-    : `${onlineParticipants} participantes online`;
+      : 'Sin actividad'
+    : `${onlineParticipants} participantes activos`;
 
   const handleSend = () => {
     if (newMessage.trim()) {
@@ -251,7 +251,7 @@ export function ChatWindow({
           </Button>
         </form>
         <p id={messageHintId} className="mt-1.5 text-[10px] text-slate-400">
-          Enter para enviar | Shift+Enter para nueva linea
+          Enter para enviar / Shift+Enter para nueva linea
         </p>
       </div>
     </div>
@@ -278,11 +278,11 @@ function formatDateSeparator(dateString: string): string {
 }
 
 function formatPresenceLabel(lastSeenAt?: string | null) {
-  if (!lastSeenAt) return 'Offline';
+  if (!lastSeenAt) return 'Sin actividad';
   const minutes = Math.max(1, Math.round((Date.now() - new Date(lastSeenAt).getTime()) / 60000));
   if (minutes < 2) return 'Hace un momento';
   if (minutes < 60) return `Hace ${minutes} min`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `Hace ${hours} h`;
-  return 'Offline';
+  return 'Sin actividad';
 }

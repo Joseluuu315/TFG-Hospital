@@ -64,7 +64,6 @@ export default function AdminLeaveRequestsPage() {
       const response = await leaveRequestsApi.getPending();
       setRequests(response.data);
     } catch {
-      console.log('[averonix] Backend no disponible, usando datos de ejemplo');
       setRequests(mockRequests);
     } finally {
       setIsLoading(false);

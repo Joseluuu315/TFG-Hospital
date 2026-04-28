@@ -70,7 +70,6 @@ export default function RootDashboard() {
         setHospitals(hospitalsRes.data);
       } catch {
         // Usar datos mock si el backend no esta disponible
-        console.log('[averonix] Backend no disponible, usando datos de ejemplo');
         setStats(fallbackStats);
         setHospitals(fallbackHospitals);
       } finally {
@@ -263,9 +262,9 @@ export default function RootDashboard() {
             </CardHeader>
             <CardContent>
               <ul className="space-y-2 text-sm text-amber-700 dark:text-amber-400">
-                <li>• 2 hospitales requieren revision de documentacion</li>
-                <li>• 1 hospital tiene pagos pendientes hace mas de 30 dias</li>
-                <li>• 5 trabajadores sin asignar turno para el proximo mes</li>
+                <li>2 hospitales requieren revision de documentacion</li>
+                <li>1 hospital tiene pagos pendientes hace mas de 30 dias</li>
+                <li>5 trabajadores sin asignar turno para el proximo mes</li>
               </ul>
             </CardContent>
           </Card>

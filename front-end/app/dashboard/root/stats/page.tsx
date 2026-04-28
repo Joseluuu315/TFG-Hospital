@@ -35,7 +35,6 @@ export default function RootStatsPage() {
         const response = await adminStatsApi.getGlobalStats();
         setStats(response.data);
       } catch {
-        console.log('[averonix] Backend no disponible, usando datos de ejemplo');
         setStats(fallbackStats);
       } finally {
         setIsLoading(false);

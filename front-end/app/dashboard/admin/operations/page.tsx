@@ -32,7 +32,7 @@ import {
 import { toast } from 'sonner';
 import {
   Settings2,
-  Sparkles,
+  ClipboardList,
   TimerReset,
   UsersRound,
   AlertCircle,
@@ -162,10 +162,10 @@ export default function AdminOperationsPage() {
     try {
       const response = await hospitalSettingsApi.update(hospitalId, { ...settings, hospitalId });
       setSettings(response.data);
-      toast.success('Configuración guardada');
+      toast.success('Configuracion guardada');
     } catch (error) {
       console.error(error);
-      toast.error('No se pudo guardar la configuración');
+      toast.error('No se pudo guardar la configuracion');
     } finally {
       setIsSavingSettings(false);
     }
@@ -224,7 +224,7 @@ export default function AdminOperationsPage() {
       console.error(error);
       const msg =
         (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'No se pudo ejecutar la autoasignación';
+        'No se pudo ejecutar la asignacion';
       toast.error(msg);
     } finally {
       setIsAutoAssigning(false);
@@ -272,9 +272,9 @@ export default function AdminOperationsPage() {
   return (
     <DashboardShell
       title="Operaciones Hospitalarias"
-      description="Configura reglas, define tipos de turno y lanza planificación automática"
+      description="Configura reglas, define tipos de turno y ejecuta la asignacion de turnos"
     >
-      {/* Métricas resumen */}
+      {/* Metricas resumen */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
@@ -300,7 +300,7 @@ export default function AdminOperationsPage() {
           </CardHeader>
           <CardContent className="flex items-center justify-between">
             <div className="text-3xl font-semibold">{existingAssignments.length}</div>
-            <Sparkles className="h-5 w-5 text-amber-600" />
+            <ClipboardList className="h-5 w-5 text-amber-600" />
           </CardContent>
         </Card>
       </div>
@@ -312,24 +312,24 @@ export default function AdminOperationsPage() {
             <Settings2 className="h-5 w-5" />
             Reglas del hospital
           </CardTitle>
-          <CardDescription>Estas reglas alimentan tanto el planificador de turnos como la nómina avanzada.</CardDescription>
+          <CardDescription>Estas reglas alimentan tanto el planificador de turnos como la nomina avanzada.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
-              <Label>Horas máximas semanales</Label>
+              <Label>Horas maximas semanales</Label>
               <Input type="number" value={settings.maxWeeklyHours} onChange={(e) => updateSettings('maxWeeklyHours', Number(e.target.value))} />
             </div>
             <div className="space-y-2">
-              <Label>Descanso mínimo entre turnos (h)</Label>
+              <Label>Descanso minimo entre turnos (h)</Label>
               <Input type="number" value={settings.minRestHours} onChange={(e) => updateSettings('minRestHours', Number(e.target.value))} />
             </div>
             <div className="space-y-2">
-              <Label>Días consecutivos máximos</Label>
+              <Label>Dias consecutivos maximos</Label>
               <Input type="number" value={settings.maxConsecutiveDays} onChange={(e) => updateSettings('maxConsecutiveDays', Number(e.target.value))} />
             </div>
             <div className="space-y-2">
-              <Label>Noches consecutivas máximas</Label>
+              <Label>Noches consecutivas maximas</Label>
               <Input type="number" value={settings.maxConsecutiveNights} onChange={(e) => updateSettings('maxConsecutiveNights', Number(e.target.value))} />
             </div>
             <div className="space-y-2">
@@ -350,7 +350,7 @@ export default function AdminOperationsPage() {
             </div>
             <div className="flex items-end justify-between rounded-lg border p-4">
               <div>
-                <p className="font-medium">Recalcular automáticamente</p>
+                <p className="font-medium">Recalcular automaticamente</p>
                 <p className="text-sm text-muted-foreground">Replanifica ante bajas y cambios</p>
               </div>
               <Switch checked={settings.autoRecalculate} onCheckedChange={(checked) => updateSettings('autoRecalculate', checked)} />
@@ -367,12 +367,12 @@ export default function AdminOperationsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Tipos de turno</CardTitle>
-            <CardDescription>Define mañana, tarde, noche o cualquier patrón especial.</CardDescription>
+            <CardDescription>Define manana, tarde, noche o cualquier patron especial.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <form onSubmit={handleCreateShiftType} className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>Código</Label>
+                <Label>Codigo</Label>
                 <Input
                   value={shiftTypeForm.code}
                   onChange={(e) => setShiftTypeForm((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))}
@@ -398,7 +398,7 @@ export default function AdminOperationsPage() {
               <div className="flex items-end justify-between rounded-lg border p-4 md:col-span-2">
                 <div>
                   <p className="font-medium">Cruza medianoche</p>
-                  <p className="text-sm text-muted-foreground">Actívalo para turno noche o guardias largas</p>
+                  <p className="text-sm text-muted-foreground">Activalo para turno noche o guardias largas</p>
                 </div>
                 <Switch checked={shiftTypeForm.crossesMidnight} onCheckedChange={(checked) => setShiftTypeForm((prev) => ({ ...prev, crossesMidnight: checked }))} />
               </div>
@@ -411,7 +411,7 @@ export default function AdminOperationsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Código</TableHead>
+                    <TableHead>Codigo</TableHead>
                     <TableHead>Nombre</TableHead>
                     <TableHead>Horario</TableHead>
                     <TableHead>Noche</TableHead>
@@ -422,7 +422,7 @@ export default function AdminOperationsPage() {
                   {shiftTypes.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        No hay tipos de turno creados aún.
+                        No hay tipos de turno creados aun.
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -430,10 +430,10 @@ export default function AdminOperationsPage() {
                       <TableRow key={st.id ?? st.code}>
                         <TableCell className="font-medium">{st.code}</TableCell>
                         <TableCell>{st.name}</TableCell>
-                        <TableCell>{st.startTime} – {st.endTime}</TableCell>
+                        <TableCell>{st.startTime} - {st.endTime}</TableCell>
                         <TableCell>
                           <Badge variant={st.crossesMidnight ? 'default' : 'secondary'}>
-                            {st.crossesMidnight ? 'Sí' : 'No'}
+                            {st.crossesMidnight ? 'Si' : 'No'}
                           </Badge>
                         </TableCell>
                         <TableCell>
@@ -456,11 +456,11 @@ export default function AdminOperationsPage() {
           </CardContent>
         </Card>
 
-        {/* Demanda y autoasignación */}
+        {/* Demanda y asignacion */}
         <Card>
           <CardHeader>
-            <CardTitle>Demanda y autoasignación</CardTitle>
-            <CardDescription>Registra necesidades por día y dispara el planificador automático.</CardDescription>
+            <CardTitle>Demanda y asignacion</CardTitle>
+            <CardDescription>Registra necesidades por dia y ejecuta la asignacion del rango seleccionado.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             {/* Advertencia si no hay tipos de turno */}
@@ -529,9 +529,9 @@ export default function AdminOperationsPage() {
               </Button>
             </form>
 
-            {/* Rango de autoasignación */}
+            {/* Rango de asignacion */}
             <div className="space-y-3 rounded-lg border p-4">
-              <p className="font-medium text-sm">Autoasignación por rango de fechas</p>
+              <p className="font-medium text-sm">Asignacion por rango de fechas</p>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Desde</Label>
@@ -551,7 +551,7 @@ export default function AdminOperationsPage() {
                 </div>
               </div>
               <Button onClick={handleAutoAssign} disabled={isAutoAssigning} className="w-full">
-                {isAutoAssigning ? 'Planificando...' : '🚀 Lanzar autoasignación'}
+                {isAutoAssigning ? 'Procesando...' : 'Ejecutar asignacion'}
               </Button>
             </div>
 
