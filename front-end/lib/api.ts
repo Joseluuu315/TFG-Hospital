@@ -449,7 +449,7 @@ export const usersApi = {
   create: (data: Partial<User> & { hospitalId: string; password?: string }) =>
       api.post<User>('/users', data as User),
   update: (id: string, data: Partial<User> & { password?: string }) => api.put<User>(`/users/${id}`, data),
-  delete: (id: string) => api.delete(`/users/${id}`),
+  deleteWorker: (id: string) => api.delete(`/users/${id}`),
   getPresence: (userIds: string[]) => api.get<UserPresenceStatus[]>('/users/presence', { params: { ids: userIds } }),
   heartbeatPresence: () => api.post('/users/me/presence'),
   getMyCalendar: (month: string) => api.get<CalendarEvent[]>(`/users/me/calendar?month=${month}`),

@@ -43,7 +43,7 @@ import {
   Mail,
   Phone,
   Calendar,
-  BadgeEuro,
+  BadgeEuro, Delete,
 } from 'lucide-react';
 import { usersApi, workerContractsApi, type User, type WorkerContract } from '@/lib/api';
 import { Spinner } from '@/components/ui/spinner';
@@ -199,6 +199,8 @@ export default function WorkersPage() {
     return payload;
   };
 
+
+
   const handleCreateWorker = async (event: React.FormEvent) => {
     event.preventDefault();
     setIsSubmitting(true);
@@ -246,6 +248,35 @@ export default function WorkersPage() {
 
   const openCalendar = (id: string | number) => {
     router.push(`/dashboard/admin/workers/${id}/calendar`);
+  };
+
+  const handleDeleteWorker = async (worker: User) => {
+    //TODO: Revisar lógica de delete, ya que si no es en cascada no deja borrar usuarios solo desactivarlo
+    if (!window.confirm(`¿Seguro que quieres eliminar a ${getDisplayName(worker)}?`)) return;
+
+    setIsSubmitting(true);
+    try {
+      const response = await usersApi.deleteWorker(String(worker.id));
+
+      // Si llegamos aquí, se borró bien
+      setWorkers((prev) => prev.filter((w) => w.id !== worker.id));
+      toast.success('Eliminado correctamente');
+    } catch (error: any) {
+      // Intenta leer el status code, eso nos dará la pista final
+      const statusCode = error.response?.status;
+      console.error("Status Code:", statusCode);
+      console.error("Error Full:", error);
+
+      if (statusCode === 500) {
+        toast.error("Error de servidor: Probablemente el usuario tiene datos vinculados (fichajes, contratos antiguos o logs) que no ves.");
+      } else if (statusCode === 403) {
+        toast.error("No tienes permisos suficientes para borrar trabajadores.");
+      } else {
+        toast.error("No se pudo eliminar. Intenta desactivarlo (Dar de baja) en su lugar.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleEditWorker = (worker: User) => {
@@ -636,6 +667,10 @@ export default function WorkersPage() {
                             <DropdownMenuItem onClick={() => handleEditWorker(worker)}>
                               <Edit className="mr-2 h-4 w-4" />
                               Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDeleteWorker(worker)}>
+                            <Delete className="mr-2 h-4 w-4" />
+                              Borrar
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => toggleWorkerStatus(worker)}>
