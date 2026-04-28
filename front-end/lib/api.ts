@@ -310,10 +310,23 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  password: string;
+}
+
 export interface AuthResponse {
   accessToken: string;
   refreshToken: string;
   user: User;
+}
+
+export interface MessageResponse {
+  message: string;
 }
 
 export interface GlobalStats {
@@ -334,6 +347,8 @@ export const authApi = {
   refresh: (refreshToken: string) => api.post<AuthResponse>('/auth/refresh', { refreshToken }),
   logout: () => api.post('/auth/logout'),
   me: () => api.get<User>('/auth/me'),
+  requestPasswordReset: (data: ForgotPasswordRequest) => api.post<MessageResponse>('/auth/forgot-password', data),
+  resetPassword: (data: ResetPasswordRequest) => api.post<MessageResponse>('/auth/reset-password', data),
 };
 
 export const hospitalsApi = {

@@ -30,13 +30,16 @@ public class UserService {
     private final UserRepository userRepository;
     private final LeaveRequestRepository leaveRequestRepository;
     private final HospitalRepository hospitalRepository;
+    private final PasswordService passwordService;
 
     public UserService(UserRepository userRepository,
                        LeaveRequestRepository leaveRequestRepository,
-                       HospitalRepository hospitalRepository) {
+                       HospitalRepository hospitalRepository,
+                       PasswordService passwordService) {
         this.userRepository = userRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.hospitalRepository = hospitalRepository;
+        this.passwordService = passwordService;
     }
 
     /**
@@ -163,7 +166,7 @@ public class UserService {
                 .leaveRequestIds(new ArrayList<>())
                 .createdAt(now.toString())
                 .updatedAt(now.toString())
-                .password(request.getPassword())
+                .password(passwordService.encode(request.getPassword()))
                 .build();
 
         return toDto(userRepository.save(document));
@@ -388,7 +391,7 @@ public class UserService {
             user.setAccountNonLocked(request.getAccountNonLocked());
         }
         if (!isBlank(request.getPassword())) {
-            user.setPassword(request.getPassword());
+            user.setPassword(passwordService.encode(request.getPassword()));
         }
     }
 

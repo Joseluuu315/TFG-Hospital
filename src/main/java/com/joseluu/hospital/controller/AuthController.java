@@ -1,8 +1,11 @@
 package com.joseluu.hospital.controller;
 
 import com.joseluu.hospital.dto.AuthResponseDto;
+import com.joseluu.hospital.dto.ForgotPasswordRequestDto;
 import com.joseluu.hospital.dto.LoginRequestDto;
+import com.joseluu.hospital.dto.MessageResponseDto;
 import com.joseluu.hospital.dto.RefreshTokenRequestDto;
+import com.joseluu.hospital.dto.ResetPasswordRequestDto;
 import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.service.AuthService;
 import jakarta.validation.Valid;
@@ -40,6 +43,22 @@ public class AuthController {
     @PostMapping("/refresh")
     public AuthResponseDto refresh(@Valid @RequestBody RefreshTokenRequestDto request) {
         return authService.refresh(request);
+    }
+
+    /**
+     * Envia un correo con enlace de recuperacion al usuario si existe.
+     */
+    @PostMapping("/forgot-password")
+    public MessageResponseDto forgotPassword(@Valid @RequestBody ForgotPasswordRequestDto request) {
+        return authService.requestPasswordReset(request);
+    }
+
+    /**
+     * Restablece la contrasena usando el token recibido por correo.
+     */
+    @PostMapping("/reset-password")
+    public MessageResponseDto resetPassword(@Valid @RequestBody ResetPasswordRequestDto request) {
+        return authService.resetPassword(request);
     }
 
     /**

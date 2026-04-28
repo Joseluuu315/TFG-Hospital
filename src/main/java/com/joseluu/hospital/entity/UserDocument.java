@@ -37,6 +37,8 @@ public class UserDocument {
     private Double baseSalary;
     private List<CalendarEventDocument> calendarEvents;
     private List<String> leaveRequestIds;
+    private String passwordResetTokenHash;
+    private String passwordResetTokenExpiresAt;
     private String createdAt;
     private String updatedAt;
 }
