@@ -23,7 +23,9 @@ export function DashboardShell({
       <Sidebar />
       <div className="md:ml-64 flex-1">
         <Header title={title} description={description} />
-        <main className={cn('p-6 space-y-6', className)}>{children}</main>
+        <main className={cn('mx-auto w-full max-w-[1600px] px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8 space-y-4 sm:space-y-6', className)}>
+          {children}
+        </main>
       </div>
     </div>
   );

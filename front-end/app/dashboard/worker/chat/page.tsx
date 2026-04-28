@@ -2,16 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { buildParticipantDirectory } from '@/components/chat/chat-models';
+import {
+  buildParticipantDirectory,
+  getUserDisplayName,
+  mergeChatMessages,
+  type UiChatMessage,
+} from '@/components/chat/chat-models';
 import { useAuth } from '@/contexts/auth-context';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import { ChatWindow } from '@/components/chat/chat-window';
+import { ChatInfoSheet } from '@/components/chat/chat-info-sheet';
 import { NewChatDialog } from '@/components/chat/new-chat-dialog';
 import { useChatPresence } from '@/hooks/use-chat-presence';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, MessageCircle, Plus, Wifi, WifiOff } from 'lucide-react';
-import { chatApi, usersApi, type Chat, type ChatMessage, type User } from '@/lib/api';
+import { chatApi, usersApi, type Chat, type User } from '@/lib/api';
 
 interface Worker {
   id: string;
@@ -27,10 +33,11 @@ export default function WorkerChatPage() {
   const { user } = useAuth();
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<UiChatMessage[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [directoryUsers, setDirectoryUsers] = useState<User[]>([]);
   const [showNewChatDialog, setShowNewChatDialog] = useState(false);
+  const [showInfoSheet, setShowInfoSheet] = useState(false);
   const [error, setError] = useState('');
   const [isLive, setIsLive] = useState(false);
 
@@ -87,7 +94,7 @@ export default function WorkerChatPage() {
       try {
         const response = await chatApi.getMessages(selectedChat.id);
         if (!isMounted) return;
-        setMessages(response.data);
+        setMessages((current) => mergeChatMessages(response.data, current));
         await chatApi.markAsRead(selectedChat.id);
         setChats((prev) =>
           prev.map((chat) => chat.id === selectedChat.id ? { ...chat, unreadCount: 0 } : chat)
@@ -107,10 +114,39 @@ export default function WorkerChatPage() {
 
   const handleSendMessage = async (content: string) => {
     if (!selectedChat || !user) return;
+    const localId = `local-${Date.now()}`;
+    const optimisticMessage: UiChatMessage = {
+      id: localId,
+      localId,
+      chatId: selectedChat.id,
+      senderId: String(user.id),
+      senderName: getUserDisplayName(user) || 'Tú',
+      content,
+      timestamp: new Date().toISOString(),
+      read: true,
+      clientState: 'sending',
+    };
+    const previousChat = chats.find((chat) => chat.id === selectedChat.id) || null;
+
+    setMessages((prev) => [...prev, optimisticMessage]);
+    setChats((prev) =>
+      prev.map((chat) =>
+        chat.id === selectedChat.id
+          ? { ...chat, lastMessage: content, lastMessageTime: optimisticMessage.timestamp, unreadCount: 0 }
+          : chat
+      )
+    );
+
     try {
       const response = await chatApi.sendMessage(selectedChat.id, content);
       const message = response.data;
-      setMessages((prev) => [...prev, message]);
+      setMessages((prev) =>
+        prev.map((currentMessage) =>
+          currentMessage.localId === localId
+            ? { ...message, clientState: 'delivered' as const }
+            : currentMessage
+        )
+      );
       setChats((prev) =>
         prev.map((chat) =>
           chat.id === selectedChat.id
@@ -120,6 +156,16 @@ export default function WorkerChatPage() {
       );
     } catch (err) {
       console.error('Error sending message', err);
+      setMessages((prev) =>
+        prev.map((currentMessage) =>
+          currentMessage.localId === localId
+            ? { ...currentMessage, clientState: 'error' as const }
+            : currentMessage
+        )
+      );
+      if (previousChat) {
+        setChats((prev) => prev.map((chat) => (chat.id === previousChat.id ? previousChat : chat)));
+      }
     }
   };
 
@@ -140,6 +186,7 @@ export default function WorkerChatPage() {
   const unreadCount = chats.filter((chat) => chat.unreadCount > 0).length;
   const currentUserId = String(user?.id || '');
   const participants = useMemo(() => buildParticipantDirectory(directoryUsers), [directoryUsers]);
+  const selectedConversationHint = selectedChat?.description;
   const trackedPresenceIds = useMemo(
     () => Array.from(new Set(chats.flatMap((chat) => chat.participants))).concat(currentUserId).filter(Boolean),
     [chats, currentUserId]
@@ -161,7 +208,7 @@ export default function WorkerChatPage() {
           </Button>
         </div>
 
-        <div className="flex min-h-[72dvh] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm md:h-[calc(100dvh-14rem)]">
+        <div className="flex min-h-[72dvh] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm lg:h-[calc(100dvh-14rem)]">
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-sm">
@@ -194,8 +241,8 @@ export default function WorkerChatPage() {
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
-            <div className="max-h-80 w-full shrink-0 overflow-hidden border-b border-slate-100 md:max-h-none md:w-80 md:border-b-0 md:border-r">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+            <div className="max-h-96 w-full shrink-0 overflow-hidden border-b border-slate-100 lg:max-h-none lg:w-[23rem] lg:border-b-0 lg:border-r">
               <ChatSidebar
                 chats={chats}
                 selectedChatId={selectedChat?.id || null}
@@ -222,6 +269,8 @@ export default function WorkerChatPage() {
                   messages={messages}
                   currentUserId={currentUserId}
                   onSendMessage={handleSendMessage}
+                  onShowInfo={() => setShowInfoSheet(true)}
+                  conversationHint={selectedConversationHint}
                   participants={participants}
                   presenceByUserId={presenceByUserId}
                 />
@@ -250,6 +299,15 @@ export default function WorkerChatPage() {
             currentUserId={currentUserId}
             onCreatePrivateChat={handleCreatePrivateChat}
             isAdmin={user?.role === 'HOSPITAL_ADMIN' || user?.role === 'ROOT'}
+          />
+
+          <ChatInfoSheet
+            open={showInfoSheet}
+            onOpenChange={setShowInfoSheet}
+            chat={selectedChat}
+            currentUserId={currentUserId}
+            participants={participants}
+            presenceByUserId={presenceByUserId}
           />
         </div>
       </div>

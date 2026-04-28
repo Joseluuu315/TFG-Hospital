@@ -1,13 +1,21 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import { ChatWindow } from '@/components/chat/chat-window';
+import { ChatInfoSheet } from '@/components/chat/chat-info-sheet';
+import {
+  buildParticipantDirectory,
+  getUserDisplayName,
+  mergeChatMessages,
+  type UiChatMessage,
+} from '@/components/chat/chat-models';
+import { useChatPresence } from '@/hooks/use-chat-presence';
 import { Badge } from '@/components/ui/badge';
 import { MessageCircle, Building2, Clock, CheckCircle2, Wifi } from 'lucide-react';
-import { chatApi, type Chat, type ChatMessage } from '@/lib/api';
+import { chatApi, usersApi, type Chat, type User } from '@/lib/api';
 import { toast } from 'sonner';
 
 const CHAT_REFRESH_MS = 4000;
@@ -16,9 +24,11 @@ export default function RootSupportPage() {
   const { user } = useAuth();
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<UiChatMessage[]>([]);
+  const [directoryUsers, setDirectoryUsers] = useState<User[]>([]);
+  const [showInfoSheet, setShowInfoSheet] = useState(false);
   const hasUser = Boolean(user?.id);
-  const visibleChats = hasUser ? chats : [];
+  const visibleChats = useMemo(() => (hasUser ? chats : []), [chats, hasUser]);
   const visibleSelectedChat = hasUser ? selectedChat : null;
   const visibleMessages = hasUser ? messages : [];
 
@@ -28,10 +38,14 @@ export default function RootSupportPage() {
 
     const loadChats = async () => {
       try {
-        const response = await chatApi.getMyChats();
+        const [chatResponse, usersResponse] = await Promise.all([
+          chatApi.getMyChats(),
+          usersApi.getAll(),
+        ]);
         if (cancelled) return;
-        const supportChats = response.data.filter((chat) => chat.type === 'SUPPORT');
+        const supportChats = chatResponse.data.filter((chat) => chat.type === 'SUPPORT');
         setChats(supportChats);
+        setDirectoryUsers(usersResponse.data);
         setSelectedChat((current) => {
           if (!current) return supportChats[0] || null;
           return supportChats.find((c) => c.id === current.id) || supportChats[0] || null;
@@ -55,7 +69,7 @@ export default function RootSupportPage() {
       try {
         const response = await chatApi.getMessages(selectedChat.id);
         if (cancelled) return;
-        setMessages(response.data);
+        setMessages((current) => mergeChatMessages(response.data, current));
         await chatApi.markAsRead(selectedChat.id);
       } catch (error) { console.error('Error cargando mensajes de soporte', error); }
     };
@@ -67,10 +81,39 @@ export default function RootSupportPage() {
 
   const handleSendMessage = async (content: string) => {
     if (!selectedChat || !user) return;
+    const localId = `local-${Date.now()}`;
+    const optimisticMessage: UiChatMessage = {
+      id: localId,
+      localId,
+      chatId: selectedChat.id,
+      senderId: String(user.id),
+      senderName: getUserDisplayName(user) || 'Tú',
+      content,
+      timestamp: new Date().toISOString(),
+      read: true,
+      clientState: 'sending',
+    };
+    const previousChat = chats.find((chat) => chat.id === selectedChat.id) || null;
+
+    setMessages((current) => [...current, optimisticMessage]);
+    setChats((current) =>
+      current.map((chat) =>
+        chat.id === selectedChat.id
+          ? { ...chat, lastMessage: content, lastMessageTime: optimisticMessage.timestamp, unreadCount: 0 }
+          : chat
+      )
+    );
+
     try {
       const response = await chatApi.sendMessage(selectedChat.id, content);
       const nextMessage = response.data;
-      setMessages((current) => [...current, nextMessage]);
+      setMessages((current) =>
+        current.map((currentMessage) =>
+          currentMessage.localId === localId
+            ? { ...nextMessage, clientState: 'delivered' as const }
+            : currentMessage
+        )
+      );
       setChats((current) =>
           current.map((chat) =>
               chat.id === selectedChat.id
@@ -78,21 +121,41 @@ export default function RootSupportPage() {
                   : chat
           )
       );
-    } catch (error) { console.error('Error respondiendo soporte', error); toast.error('No se pudo enviar la respuesta.'); }
+    } catch (error) {
+      console.error('Error respondiendo soporte', error);
+      setMessages((current) =>
+        current.map((currentMessage) =>
+          currentMessage.localId === localId
+            ? { ...currentMessage, clientState: 'error' as const }
+            : currentMessage
+        )
+      );
+      if (previousChat) {
+        setChats((current) => current.map((chat) => (chat.id === previousChat.id ? previousChat : chat)));
+      }
+      toast.error('No se pudo enviar la respuesta.');
+    }
   };
 
   const totalChats = visibleChats.length;
   const pendingChats = visibleChats.filter((c) => c.unreadCount > 0).length;
   const resolvedChats = visibleChats.filter((c) => c.unreadCount === 0).length;
+  const currentUserId = String(user?.id || '');
+  const participants = useMemo(() => buildParticipantDirectory(directoryUsers), [directoryUsers]);
+  const trackedPresenceIds = useMemo(
+    () => Array.from(new Set(visibleChats.flatMap((chat) => chat.participants))).concat(currentUserId).filter(Boolean),
+    [currentUserId, visibleChats]
+  );
+  const presenceByUserId = useChatPresence(trackedPresenceIds, currentUserId);
 
   return (
     <DashboardShell
       title="Soporte"
       description="Supervisa incidencias y conversaciones con hospitales."
     >
-      <div className="space-y-5">
+      <div className="space-y-4 sm:space-y-5">
         {/* Header */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 via-slate-900 to-emerald-950 p-6 text-white shadow-lg">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 via-slate-900 to-emerald-950 p-5 text-white shadow-lg sm:p-6">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(16,185,129,0.2),_transparent_55%)]" />
           <div className="relative flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1">
@@ -141,14 +204,17 @@ export default function RootSupportPage() {
             <p className="font-medium text-slate-800">Canales de soporte</p>
             <p className="text-xs text-slate-400">Conversaciones entre administradores y sede central</p>
           </div>
-          <div className="flex flex-col overflow-hidden md:flex-row md:h-[calc(100vh-26rem)]">
-            <div className="w-full flex-shrink-0 border-b border-slate-100 md:w-72 md:border-b-0 md:border-r">
+          <div className="flex flex-col overflow-hidden lg:h-[calc(100vh-26rem)] lg:flex-row">
+            <div className="max-h-96 w-full flex-shrink-0 overflow-hidden border-b border-slate-100 lg:max-h-none lg:w-[23rem] lg:border-b-0 lg:border-r">
               <ChatSidebar
                   chats={visibleChats}
                   selectedChatId={visibleSelectedChat?.id || null}
                   onSelectChat={setSelectedChat}
                   showNewChatButton={false}
                   userRole="ROOT"
+                  currentUserId={currentUserId}
+                  participants={participants}
+                  presenceByUserId={presenceByUserId}
               />
             </div>
             <div className="flex-1 bg-slate-50/40" role="region" aria-label="Chat de soporte">
@@ -156,8 +222,12 @@ export default function RootSupportPage() {
                   <ChatWindow
                       chat={visibleSelectedChat}
                       messages={visibleMessages}
-                      currentUserId={String(user?.id)}
+                      currentUserId={currentUserId}
                       onSendMessage={handleSendMessage}
+                      onShowInfo={() => setShowInfoSheet(true)}
+                      conversationHint={visibleSelectedChat.description}
+                      participants={participants}
+                      presenceByUserId={presenceByUserId}
                   />
               ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
@@ -173,6 +243,15 @@ export default function RootSupportPage() {
             </div>
           </div>
         </div>
+
+        <ChatInfoSheet
+          open={showInfoSheet}
+          onOpenChange={setShowInfoSheet}
+          chat={visibleSelectedChat}
+          currentUserId={currentUserId}
+          participants={participants}
+          presenceByUserId={presenceByUserId}
+        />
       </div>
     </DashboardShell>
   );

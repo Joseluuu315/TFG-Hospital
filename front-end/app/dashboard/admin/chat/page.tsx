@@ -2,11 +2,17 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { buildParticipantDirectory } from '@/components/chat/chat-models';
+import {
+  buildParticipantDirectory,
+  getUserDisplayName,
+  mergeChatMessages,
+  type UiChatMessage,
+} from '@/components/chat/chat-models';
 import { useAuth } from '@/contexts/auth-context';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import { ChatWindow } from '@/components/chat/chat-window';
+import { ChatInfoSheet } from '@/components/chat/chat-info-sheet';
 import { NewChatDialog } from '@/components/chat/new-chat-dialog';
 import { useChatPresence } from '@/hooks/use-chat-presence';
 import { Button } from '@/components/ui/button';
@@ -16,7 +22,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChevronLeft, MessageCircle, Users, Settings, Plus, Trash2 } from 'lucide-react';
-import { chatApi, usersApi, workGroupsApi, type Chat, type ChatMessage, type User, type WorkGroup } from '@/lib/api';
+import { chatApi, usersApi, workGroupsApi, type Chat, type User, type WorkGroup } from '@/lib/api';
 import { toast } from 'sonner';
 
 interface WorkerOption {
@@ -37,8 +43,9 @@ export default function AdminChatPage() {
   const [workers, setWorkers] = useState<WorkerOption[]>([]);
   const [directoryUsers, setDirectoryUsers] = useState<User[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<UiChatMessage[]>([]);
   const [showNewChatDialog, setShowNewChatDialog] = useState(false);
+  const [showInfoSheet, setShowInfoSheet] = useState(false);
   const [editingGroup, setEditingGroup] = useState<WorkGroup | null>(null);
   const [editingMembers, setEditingMembers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,7 +96,7 @@ export default function AdminChatPage() {
       try {
         const response = await chatApi.getMessages(selectedChat.id);
         if (cancelled) return;
-        setMessages(response.data);
+        setMessages((current) => mergeChatMessages(response.data, current));
         await chatApi.markAsRead(selectedChat.id);
         setChats((current) =>
             current.map((chat) => chat.id === selectedChat.id ? { ...chat, unreadCount: 0 } : chat)
@@ -104,10 +111,39 @@ export default function AdminChatPage() {
 
   const handleSendMessage = async (content: string) => {
     if (!selectedChat || !user) return;
+    const localId = `local-${Date.now()}`;
+    const optimisticMessage: UiChatMessage = {
+      id: localId,
+      localId,
+      chatId: selectedChat.id,
+      senderId: String(user.id),
+      senderName: getUserDisplayName(user) || 'Tú',
+      content,
+      timestamp: new Date().toISOString(),
+      read: true,
+      clientState: 'sending',
+    };
+    const previousChat = chats.find((chat) => chat.id === selectedChat.id) || null;
+
+    setMessages((current) => [...current, optimisticMessage]);
+    setChats((current) =>
+      current.map((chat) =>
+        chat.id === selectedChat.id
+          ? { ...chat, lastMessage: content, lastMessageTime: optimisticMessage.timestamp, unreadCount: 0 }
+          : chat
+      )
+    );
+
     try {
       const response = await chatApi.sendMessage(selectedChat.id, content);
       const message = response.data;
-      setMessages((current) => [...current, message]);
+      setMessages((current) =>
+        current.map((currentMessage) =>
+          currentMessage.localId === localId
+            ? { ...message, clientState: 'delivered' as const }
+            : currentMessage
+        )
+      );
       setChats((current) =>
           current.map((chat) =>
               chat.id === selectedChat.id
@@ -115,7 +151,20 @@ export default function AdminChatPage() {
                   : chat
           )
       );
-    } catch (error) { console.error('Error enviando mensaje', error); toast.error('No se pudo enviar el mensaje.'); }
+    } catch (error) {
+      console.error('Error enviando mensaje', error);
+      setMessages((current) =>
+        current.map((currentMessage) =>
+          currentMessage.localId === localId
+            ? { ...currentMessage, clientState: 'error' as const }
+            : currentMessage
+        )
+      );
+      if (previousChat) {
+        setChats((current) => current.map((chat) => (chat.id === previousChat.id ? previousChat : chat)));
+      }
+      toast.error('No se pudo enviar el mensaje.');
+    }
   };
 
   const handleCreatePrivateChat = async (userId: string) => {
@@ -187,6 +236,11 @@ export default function AdminChatPage() {
   const unreadChats = chats.filter((c) => c.unreadCount > 0).length;
   const currentUserId = String(user?.id || '');
   const participants = useMemo(() => buildParticipantDirectory(directoryUsers), [directoryUsers]);
+  const selectedGroup = useMemo(
+    () => workGroups.find((group) => group.chatId === selectedChat?.id) || null,
+    [selectedChat?.id, workGroups]
+  );
+  const selectedConversationHint = selectedGroup?.description || selectedChat?.description;
   const trackedPresenceIds = useMemo(
       () => Array.from(new Set(chats.flatMap((chat) => chat.participants))).concat(currentUserId).filter(Boolean),
       [chats, currentUserId]
@@ -198,7 +252,7 @@ export default function AdminChatPage() {
       title="Comunicaciones"
       description="Gestiona mensajes y grupos del hospital."
     >
-      <div className="space-y-5">
+      <div className="space-y-4 sm:space-y-5">
         <div className="flex items-center justify-between">
           <Button variant="ghost" size="sm" asChild>
             <Link href="/dashboard/admin">
@@ -208,7 +262,7 @@ export default function AdminChatPage() {
           </Button>
         </div>
         {/* Header banner */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-cyan-900 p-6 text-white shadow-lg">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-cyan-900 p-5 text-white shadow-lg sm:p-6">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(34,211,238,0.15),_transparent_60%)]" />
           <div className="relative flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1">
@@ -218,7 +272,7 @@ export default function AdminChatPage() {
               </div>
               <h1 className="text-xl font-semibold tracking-tight">Comunicaciones del hospital</h1>
             </div>
-            <div className="flex gap-3">
+            <div className="grid w-full grid-cols-2 gap-3 sm:w-auto">
               <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-center backdrop-blur">
                 <p className="text-2xl font-bold">{chats.length}</p>
                 <p className="text-xs text-slate-400">{unreadChats} pendientes</p>
@@ -232,8 +286,8 @@ export default function AdminChatPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="h-10 rounded-xl bg-slate-100 p-1">
-            <TabsTrigger value="chat" className="rounded-lg px-4 text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">
+          <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-xl bg-slate-100 p-1">
+            <TabsTrigger value="chat" className="shrink-0 rounded-lg px-4 text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">
               <MessageCircle className="mr-2 h-3.5 w-3.5" />
               Mensajes
               {unreadChats > 0 && (
@@ -242,7 +296,7 @@ export default function AdminChatPage() {
               </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="groups" className="rounded-lg px-4 text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            <TabsTrigger value="groups" className="shrink-0 rounded-lg px-4 text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">
               <Users className="mr-2 h-3.5 w-3.5" />
               Grupos
             </TabsTrigger>
@@ -250,8 +304,8 @@ export default function AdminChatPage() {
 
           {/* TAB: CHAT */}
           <TabsContent value="chat" className="mt-4">
-            <div className="flex min-h-[72dvh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:h-[calc(100dvh-17rem)] md:flex-row">
-              <div className="max-h-80 w-full shrink-0 overflow-hidden border-b border-slate-100 md:max-h-none md:w-80 md:border-b-0 md:border-r">
+            <div className="flex min-h-[72dvh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:h-[calc(100dvh-17rem)] lg:flex-row">
+              <div className="max-h-96 w-full shrink-0 overflow-hidden border-b border-slate-100 lg:max-h-none lg:w-[23rem] lg:border-b-0 lg:border-r">
                 <ChatSidebar
                     chats={chats}
                     selectedChatId={selectedChat?.id || null}
@@ -271,6 +325,8 @@ export default function AdminChatPage() {
                         messages={messages}
                         currentUserId={currentUserId}
                         onSendMessage={handleSendMessage}
+                        onShowInfo={() => setShowInfoSheet(true)}
+                        conversationHint={selectedConversationHint}
                         participants={participants}
                         presenceByUserId={presenceByUserId}
                     />
@@ -312,7 +368,7 @@ export default function AdminChatPage() {
                   <Button size="sm" variant="outline" onClick={() => setShowNewChatDialog(true)}>Crear primer grupo</Button>
                 </div>
             ) : (
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {workGroups.map((group) => {
                     const isLinked = chats.some((c) => c.id === group.chatId);
                     return (
@@ -406,6 +462,16 @@ export default function AdminChatPage() {
             onCreatePrivateChat={handleCreatePrivateChat}
             onCreateGroupChat={handleCreateGroupChat}
             isAdmin
+        />
+
+        <ChatInfoSheet
+          open={showInfoSheet}
+          onOpenChange={setShowInfoSheet}
+          chat={selectedChat}
+          currentUserId={currentUserId}
+          participants={participants}
+          presenceByUserId={presenceByUserId}
+          group={selectedGroup}
         />
 
         {/* Dialog editar miembros */}

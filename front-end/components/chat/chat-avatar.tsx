@@ -63,7 +63,7 @@ export function ChatAvatar({
             isOnline ? 'bg-emerald-500' : 'bg-slate-300'
           )}
           aria-label={isOnline ? 'Usuario conectado' : 'Usuario desconectado'}
-          title={isOnline ? 'Online' : 'Offline'}
+          title={isOnline ? 'Activo' : 'Sin actividad'}
         />
       )}
     </div>

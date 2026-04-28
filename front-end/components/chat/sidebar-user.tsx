@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils';
 interface SidebarUserProps {
   name: string;
   subtitle: string;
+  metaLabel?: string;
+  statusLabel?: string;
   timestamp?: string;
   unreadCount?: number;
   selected?: boolean;
@@ -18,6 +20,8 @@ interface SidebarUserProps {
 export function SidebarUser({
   name,
   subtitle,
+  metaLabel,
+  statusLabel,
   timestamp,
   unreadCount = 0,
   selected = false,
@@ -48,25 +52,46 @@ export function SidebarUser({
           textClassName="text-[11px]"
         />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <span className={cn('truncate text-sm font-semibold', selected ? 'text-white' : 'text-slate-800')}>
-              {name}
-            </span>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 space-y-1">
+              <span className={cn('block truncate text-sm font-semibold sm:text-[15px]', selected ? 'text-white' : 'text-slate-800')}>
+                {name}
+              </span>
+              {(metaLabel || statusLabel) && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {metaLabel && (
+                    <span
+                      className={cn(
+                        'inline-flex max-w-full items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
+                        selected ? 'bg-white/10 text-slate-200' : 'bg-slate-100 text-slate-600'
+                      )}
+                    >
+                      <span className="truncate">{metaLabel}</span>
+                    </span>
+                  )}
+                  {statusLabel && (
+                    <span className={cn('text-[11px]', selected ? 'text-slate-300' : 'text-slate-500')}>
+                      {statusLabel}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
             {timestamp && (
               <time
                 dateTime={timestamp}
-                className={cn('shrink-0 text-[11px]', selected ? 'text-slate-400' : 'text-slate-400')}
+                className={cn('shrink-0 pt-0.5 text-[11px]', selected ? 'text-slate-400' : 'text-slate-400')}
               >
                 {formatSidebarTime(timestamp)}
               </time>
             )}
           </div>
-          <div className="mt-1 flex items-center justify-between gap-2">
-            <p className={cn('truncate text-xs', selected ? 'text-slate-300' : 'text-slate-500')}>
+          <div className="mt-2 flex items-start justify-between gap-2">
+            <p className={cn('line-clamp-2 text-xs leading-5', selected ? 'text-slate-300' : 'text-slate-500')}>
               {subtitle}
             </p>
             {unreadCount > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-cyan-500 px-1.5 text-[10px] font-bold text-white">
+              <span className="mt-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-cyan-500 px-1.5 text-[10px] font-bold text-white">
                 {unreadCount}
               </span>
             )}

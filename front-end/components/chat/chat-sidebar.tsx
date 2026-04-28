@@ -146,6 +146,10 @@ export function ChatSidebar({
                         : formatLastSeen(presenceByUserId[peer.id]?.lastSeenAt)
                       : 'Sin datos'
                     : `${onlineParticipants} activos`;
+                  const metaLabel = chat.type === 'PRIVATE'
+                    ? peer?.department || peer?.jobTitle || 'Contacto'
+                    : `${chat.participantNames.length} participantes`;
+                  const previewText = chat.lastMessage || chat.description || 'Sin mensajes recientes';
 
                   return (
                     <SidebarUser
@@ -153,7 +157,9 @@ export function ChatSidebar({
                       onClick={() => onSelectChat(chat)}
                       selected={isSelected}
                       name={displayName}
-                      subtitle={chat.lastMessage || statusText}
+                      subtitle={previewText}
+                      metaLabel={metaLabel}
+                      statusLabel={statusText}
                       timestamp={chat.lastMessageTime}
                       unreadCount={chat.unreadCount}
                       avatarUrl={peer?.avatarUrl}

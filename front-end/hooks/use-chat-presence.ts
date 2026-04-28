@@ -3,121 +3,127 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { UserPresence } from '@/components/chat/chat-models';
 
-const STORAGE_KEY = 'chat-presence-state';
-const PRESENCE_INTERVAL_MS = 12000;
+const STORAGE_KEY = 'chat-presence-heartbeats-v2';
+const CHANNEL_NAME = 'chat-presence-sync';
+const HEARTBEAT_INTERVAL_MS = 10000;
+const ONLINE_TTL_MS = HEARTBEAT_INTERVAL_MS * 3;
+
+type PresenceHeartbeatMap = Record<string, string>;
 
 export function useChatPresence(userIds: string[], currentUserId?: string) {
   const stableIds = useMemo(() => Array.from(new Set(userIds.filter(Boolean))), [userIds]);
-  const basePresenceMap = useMemo(() => {
-    const storedValue = readPresenceStorage();
-    const nextMap = stableIds.reduce<Record<string, UserPresence>>((acc, id) => {
-      acc[id] = storedValue[id] || createInitialPresence(id, id === currentUserId);
-      return acc;
-    }, {});
-
-    if (currentUserId) {
-      nextMap[currentUserId] = { isOnline: true, lastSeenAt: new Date().toISOString() };
-    }
-
-    return nextMap;
-  }, [currentUserId, stableIds]);
   const [presenceMap, setPresenceMap] = useState<Record<string, UserPresence>>({});
-  const resolvedPresenceMap = useMemo(
-    () => stableIds.reduce<Record<string, UserPresence>>((acc, id) => {
-      acc[id] = presenceMap[id] || basePresenceMap[id];
-      return acc;
-    }, {}),
-    [basePresenceMap, presenceMap, stableIds]
-  );
 
   useEffect(() => {
     if (!stableIds.length) return;
 
-    const interval = window.setInterval(() => {
-      setPresenceMap((current) => {
-        const next = { ...current };
-
-        stableIds.forEach((id) => {
-          const existing = next[id] || basePresenceMap[id] || createInitialPresence(id, id === currentUserId);
-          if (id === currentUserId) {
-            next[id] = { isOnline: true, lastSeenAt: new Date().toISOString() };
-            return;
-          }
-
-          const shouldToggle = hashString(`${id}-${Math.floor(Date.now() / PRESENCE_INTERVAL_MS)}`) % 4 === 0;
-          const isOnline = shouldToggle ? !existing.isOnline : existing.isOnline;
-          next[id] = {
-            isOnline,
-            lastSeenAt: isOnline ? new Date().toISOString() : existing.lastSeenAt || new Date().toISOString(),
-          };
-        });
-
-        writePresenceStorage(next);
-        return next;
-      });
-    }, PRESENCE_INTERVAL_MS);
-
-    const handleVisibility = () => {
-      if (!currentUserId) return;
-      setPresenceMap((current) => {
-        const next = {
-          ...current,
-          [currentUserId]: {
-            isOnline: !document.hidden,
-            lastSeenAt: new Date().toISOString(),
-          },
-        };
-        writePresenceStorage(next);
-        return next;
-      });
+    const syncPresence = () => {
+      const heartbeats = pruneHeartbeats(readHeartbeats());
+      setPresenceMap(resolvePresence(stableIds, heartbeats, currentUserId));
     };
 
-    document.addEventListener('visibilitychange', handleVisibility);
-    window.addEventListener('focus', handleVisibility);
+    const channel =
+      typeof window !== 'undefined' && 'BroadcastChannel' in window
+        ? new BroadcastChannel(CHANNEL_NAME)
+        : null;
+
+    const publishPresence = (forceOnline = false) => {
+      if (!currentUserId) return;
+
+      const nextHeartbeats = pruneHeartbeats(readHeartbeats());
+      if (forceOnline || !document.hidden) {
+        nextHeartbeats[currentUserId] = new Date().toISOString();
+      }
+
+      writeHeartbeats(nextHeartbeats);
+      channel?.postMessage({ type: 'presence-sync', userId: currentUserId });
+      setPresenceMap(resolvePresence(stableIds, nextHeartbeats, currentUserId));
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key && event.key !== STORAGE_KEY) return;
+      syncPresence();
+    };
+
+    const handleVisibilityChange = () => {
+      publishPresence(true);
+    };
+
+    channel?.addEventListener('message', syncPresence);
+    syncPresence();
+    publishPresence(true);
+
+    const interval = window.setInterval(() => {
+      if (currentUserId && navigator.onLine) {
+        publishPresence();
+        return;
+      }
+      syncPresence();
+    }, HEARTBEAT_INTERVAL_MS);
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('focus', handleVisibilityChange);
+    window.addEventListener('online', handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', handleVisibility);
-      window.removeEventListener('focus', handleVisibility);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', handleVisibilityChange);
+      window.removeEventListener('online', handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      channel?.removeEventListener('message', syncPresence);
+      channel?.close();
     };
-  }, [basePresenceMap, currentUserId, stableIds]);
+  }, [currentUserId, stableIds]);
 
-  useEffect(() => {
-    if (!stableIds.length) return;
-    writePresenceStorage(resolvedPresenceMap);
-  }, [resolvedPresenceMap, stableIds.length]);
-
-  return resolvedPresenceMap;
+  return stableIds.length ? presenceMap : {};
 }
 
-function createInitialPresence(userId: string, forceOnline = false): UserPresence {
-  const online = forceOnline || hashString(userId) % 3 !== 0;
-  return {
-    isOnline: online,
-    lastSeenAt: new Date(Date.now() - (hashString(`seen-${userId}`) % 45) * 60_000).toISOString(),
-  };
+function resolvePresence(
+  stableIds: string[],
+  heartbeats: PresenceHeartbeatMap,
+  currentUserId?: string
+): Record<string, UserPresence> {
+  return stableIds.reduce<Record<string, UserPresence>>((acc, id) => {
+    const lastSeenAt = heartbeats[id] ?? null;
+    const isCurrentUser = currentUserId === id;
+    const isOnline = isCurrentUser
+      ? typeof document !== 'undefined'
+        ? !document.hidden
+        : true
+      : Boolean(lastSeenAt && Date.now() - new Date(lastSeenAt).getTime() <= ONLINE_TTL_MS);
+
+    acc[id] = {
+      isOnline,
+      lastSeenAt: lastSeenAt || null,
+    };
+    return acc;
+  }, {});
 }
 
-function readPresenceStorage() {
+function pruneHeartbeats(heartbeats: PresenceHeartbeatMap) {
+  const now = Date.now();
+  return Object.entries(heartbeats).reduce<PresenceHeartbeatMap>((acc, [userId, timestamp]) => {
+    const time = new Date(timestamp).getTime();
+    if (Number.isFinite(time) && now - time <= ONLINE_TTL_MS * 2) {
+      acc[userId] = timestamp;
+    }
+    return acc;
+  }, {});
+}
+
+function readHeartbeats() {
   if (typeof window === 'undefined') return {};
   try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    return stored ? (JSON.parse(stored) as Record<string, UserPresence>) : {};
+    const storedValue = window.localStorage.getItem(STORAGE_KEY);
+    return storedValue ? (JSON.parse(storedValue) as PresenceHeartbeatMap) : {};
   } catch {
     return {};
   }
 }
 
-function writePresenceStorage(presenceMap: Record<string, UserPresence>) {
+function writeHeartbeats(heartbeats: PresenceHeartbeatMap) {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(presenceMap));
-}
-
-function hashString(value: string) {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash << 5) - hash + value.charCodeAt(index);
-    hash |= 0;
-  }
-  return Math.abs(hash);
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(heartbeats));
 }

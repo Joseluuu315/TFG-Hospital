@@ -91,19 +91,21 @@ export function Header({ title, description }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-16 items-center justify-between px-4 sm:px-6">
-        <div className="flex items-center gap-3">
+      <div className="mx-auto flex min-h-16 w-full max-w-[1600px] flex-wrap items-start justify-between gap-3 px-4 py-3 sm:px-6 md:flex-nowrap md:items-center lg:px-8">
+        <div className="flex min-w-0 items-start gap-3 md:items-center">
           <MobileSidebar />
-          <div>
-            <h1 className="text-xl font-semibold">{title}</h1>
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-semibold sm:text-xl">{title}</h1>
             {description && (
-              <p className="text-sm text-muted-foreground">{description}</p>
+              <p className="mt-0.5 line-clamp-2 max-w-2xl text-xs text-muted-foreground sm:text-sm">
+                {description}
+              </p>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <InputGroup className="hidden md:flex w-64">
+        <div className="flex w-full items-center justify-end gap-2 sm:gap-3 md:w-auto md:flex-nowrap">
+          <InputGroup className="hidden lg:flex w-64 xl:w-72">
             <InputGroupAddon>
               <Search className="h-4 w-4" />
             </InputGroupAddon>
@@ -178,9 +180,9 @@ export function Header({ title, description }: HeaderProps) {
             </Button>
           )}
 
-          <div className="hidden sm:flex items-center gap-2 text-sm">
+          <div className="hidden lg:flex min-w-0 items-center gap-2 text-sm">
             <span className="text-muted-foreground">Bienvenido,</span>
-            <span className="font-medium">{fullName || 'Usuario'}</span>
+            <span className="truncate font-medium">{fullName || 'Usuario'}</span>
           </div>
         </div>
       </div>

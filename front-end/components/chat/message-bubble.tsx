@@ -1,7 +1,9 @@
 'use client';
 
 import { ChatAvatar } from '@/components/chat/chat-avatar';
+import type { ChatDeliveryState } from '@/components/chat/chat-models';
 import { cn } from '@/lib/utils';
+import { AlertCircle, CheckCheck, Clock3 } from 'lucide-react';
 
 interface MessageBubbleProps {
   senderName: string;
@@ -15,6 +17,7 @@ interface MessageBubbleProps {
   compactBottom: boolean;
   isSenderOnline?: boolean;
   gradientClassName?: string;
+  deliveryState?: ChatDeliveryState;
 }
 
 export function MessageBubble({
@@ -29,6 +32,7 @@ export function MessageBubble({
   compactBottom,
   isSenderOnline,
   gradientClassName,
+  deliveryState = 'delivered',
 }: MessageBubbleProps) {
   const ownRadius = cn(
     'rounded-[22px]',
@@ -44,42 +48,69 @@ export function MessageBubble({
   return (
     <div
       className={cn(
-        'animate-in fade-in-0 slide-in-from-bottom-1 flex items-end gap-2 duration-200',
+        'animate-in fade-in-0 slide-in-from-bottom-1 flex items-end gap-2.5 duration-200',
         isOwn ? 'justify-end' : 'justify-start'
       )}
     >
       {!isOwn && (
-        <div className={cn('w-8 shrink-0', !showAvatar && 'invisible')}>
+        <div className={cn('w-9 shrink-0', !showAvatar && 'invisible')}>
           <ChatAvatar
             name={senderName}
             imageUrl={senderImageUrl}
             isOnline={isSenderOnline}
             gradientClassName={gradientClassName}
-            sizeClassName="h-8 w-8"
+            sizeClassName="h-9 w-9"
             textClassName="text-[10px]"
           />
         </div>
       )}
 
-      <div className={cn('flex max-w-[82%] flex-col sm:max-w-[72%]', isOwn ? 'items-end' : 'items-start')}>
-        {showName && !isOwn && <p className="mb-1 px-1 text-[11px] font-medium text-slate-500">{senderName}</p>}
+      <div className={cn('flex max-w-[88%] flex-col sm:max-w-[76%] lg:max-w-[72%]', isOwn ? 'items-end' : 'items-start')}>
+        {showName && !isOwn && <p className="mb-1.5 px-1 text-xs font-semibold tracking-[0.01em] text-slate-600">{senderName}</p>}
         <div
           className={cn(
-            'px-4 py-2.5 shadow-sm transition-colors',
+            'space-y-2 px-4 py-3 shadow-sm transition-colors',
             isOwn
-              ? cn('bg-slate-900 text-white', ownRadius)
-              : cn('border border-slate-200 bg-white text-slate-800', otherRadius)
+              ? cn(
+                  deliveryState === 'error'
+                    ? 'border border-red-200 bg-red-50 text-red-900'
+                    : 'bg-slate-900 text-white',
+                  ownRadius
+                )
+              : cn('border border-slate-200 bg-white/95 text-slate-800', otherRadius)
           )}
         >
-          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{content}</p>
-          <time
-            dateTime={timestamp}
-            className={cn('mt-1 block text-right text-[10px]', isOwn ? 'text-slate-300' : 'text-slate-400')}
-          >
-            {new Date(timestamp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-          </time>
+          <p className="whitespace-pre-wrap break-words text-sm leading-6">{content}</p>
+          <div className="flex items-center justify-end gap-1.5">
+            <time
+              dateTime={timestamp}
+              className={cn(
+                'block text-right text-[10px] font-medium',
+                isOwn
+                  ? deliveryState === 'error'
+                    ? 'text-red-700'
+                    : 'text-slate-300'
+                  : 'text-slate-400'
+              )}
+            >
+              {new Date(timestamp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+            </time>
+            {isOwn && <DeliveryStateIndicator state={deliveryState} />}
+          </div>
         </div>
       </div>
     </div>
   );
+}
+
+function DeliveryStateIndicator({ state }: { state: ChatDeliveryState }) {
+  if (state === 'sending') {
+    return <Clock3 className="h-3.5 w-3.5 text-slate-300" aria-label="Enviando" />;
+  }
+
+  if (state === 'error') {
+    return <AlertCircle className="h-3.5 w-3.5 text-red-600" aria-label="Error al enviar" />;
+  }
+
+  return <CheckCheck className="h-3.5 w-3.5 text-emerald-300" aria-label="Entregado" />;
 }
