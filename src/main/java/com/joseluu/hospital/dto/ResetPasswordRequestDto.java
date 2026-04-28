@@ -8,6 +8,6 @@ public class ResetPasswordRequestDto {
     @NotBlank(message = "El token es obligatorio")
     private String token;
 
-    @NotBlank(message = "La nueva contrasena es obligatoria")
+    @NotBlank(message = "La nueva contraseña es obligatoria")
     private String password;
 }
