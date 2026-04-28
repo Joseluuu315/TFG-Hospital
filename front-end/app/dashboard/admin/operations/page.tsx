@@ -25,6 +25,7 @@ import {
   usersApi,
   type HospitalSettings,
   type ShiftAssignment,
+  type ShiftRequirement,
   type ShiftType,
   type User,
 } from '@/lib/api';
