@@ -3,12 +3,16 @@ package com.joseluu.hospital.service;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
+
 /**
  * Gestiona el hash y la validacion de contrasenas.
  */
 @Service
 public class PasswordService {
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private static final String ALLOWED_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+    private final SecureRandom secureRandom = new SecureRandom();
 
     /**
      * Devuelve la contrasena en hash BCrypt.
@@ -45,6 +49,18 @@ public class PasswordService {
             return password;
         }
         return encode(password);
+    }
+
+    /**
+     * Genera una contrasena temporal legible para altas iniciales.
+     */
+    public String generateTemporaryPassword() {
+        StringBuilder builder = new StringBuilder(14);
+        for (int index = 0; index < 14; index++) {
+            int charIndex = secureRandom.nextInt(ALLOWED_CHARS.length());
+            builder.append(ALLOWED_CHARS.charAt(charIndex));
+        }
+        return builder.toString();
     }
 
     private boolean isEncoded(String value) {

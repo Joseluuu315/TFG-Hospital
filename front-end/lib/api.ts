@@ -147,8 +147,15 @@ export interface User {
   baseSalary?: number;
   calendarEvents?: CalendarEvent[];
   leaveRequests?: LeaveRequest[];
+  lastSeenAt?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface UserPresenceStatus {
+  userId: string;
+  online: boolean;
+  lastSeenAt?: string | null;
 }
 
 export interface Payroll {
@@ -439,9 +446,12 @@ export const adminStatsApi = {
 export const usersApi = {
   getAll: () => api.get<User[]>('/users'),
   getById: (id: string) => api.get<User>(`/users/${id}`),
-  create: (data: Partial<User> & { password: string; hospitalId: string }) => api.post<User>('/users', data),
+  create: (data: Partial<User> & { hospitalId: string; password?: string }) =>
+      api.post<User>('/users', data as User),
   update: (id: string, data: Partial<User> & { password?: string }) => api.put<User>(`/users/${id}`, data),
   delete: (id: string) => api.delete(`/users/${id}`),
+  getPresence: (userIds: string[]) => api.get<UserPresenceStatus[]>('/users/presence', { params: { ids: userIds } }),
+  heartbeatPresence: () => api.post('/users/me/presence'),
   getMyCalendar: (month: string) => api.get<CalendarEvent[]>(`/users/me/calendar?month=${month}`),
   createLeaveRequest: (data: { startDate: string; endDate: string; reason: string }) =>
     api.post<LeaveRequest>('/users/me/leave-requests', data),

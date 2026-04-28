@@ -39,6 +39,7 @@ public class UserDocument {
     private List<String> leaveRequestIds;
     private String passwordResetTokenHash;
     private String passwordResetTokenExpiresAt;
+    private String lastSeenAt;
     private String createdAt;
     private String updatedAt;
 }

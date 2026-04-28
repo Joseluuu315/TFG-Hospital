@@ -5,6 +5,7 @@ import com.joseluu.hospital.dto.CreateUserRequestDto;
 import com.joseluu.hospital.dto.LeaveRequestDto;
 import com.joseluu.hospital.dto.UpdateUserRequestDto;
 import com.joseluu.hospital.dto.UserDto;
+import com.joseluu.hospital.dto.UserPresenceDto;
 import com.joseluu.hospital.entity.CalendarEventDocument;
 import com.joseluu.hospital.entity.HospitalDocument;
 import com.joseluu.hospital.entity.LeaveRequestDocument;
@@ -21,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Servicio para gestionar usuarios y sus datos asociados.
@@ -31,15 +33,18 @@ public class UserService {
     private final LeaveRequestRepository leaveRequestRepository;
     private final HospitalRepository hospitalRepository;
     private final PasswordService passwordService;
+    private final ResendEmailService resendEmailService;
 
     public UserService(UserRepository userRepository,
                        LeaveRequestRepository leaveRequestRepository,
                        HospitalRepository hospitalRepository,
-                       PasswordService passwordService) {
+                       PasswordService passwordService,
+                       ResendEmailService resendEmailService) {
         this.userRepository = userRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.hospitalRepository = hospitalRepository;
         this.passwordService = passwordService;
+        this.resendEmailService = resendEmailService;
     }
 
     /**
@@ -141,9 +146,13 @@ public class UserService {
      * Crea un trabajador asociado a un hospital.
      */
     public UserDto createWorker(CreateUserRequestDto request) {
+        resendEmailService.assertConfigured();
         LocalDateTime now = LocalDateTime.now();
         HospitalDocument hospital = requireHospital(request.getHospitalId());
         UserRole role = request.getRole() != null ? request.getRole() : UserRole.WORKER;
+        String temporaryPassword = !isBlank(request.getPassword())
+                ? request.getPassword()
+                : passwordService.generateTemporaryPassword();
 
         UserDocument document = UserDocument.builder()
                 .id(UUID.randomUUID().toString())
@@ -164,12 +173,55 @@ public class UserService {
                 .hireDate(now.toLocalDate().toString())
                 .calendarEvents(new ArrayList<>())
                 .leaveRequestIds(new ArrayList<>())
+                .lastSeenAt(null)
                 .createdAt(now.toString())
                 .updatedAt(now.toString())
-                .password(passwordService.encode(request.getPassword()))
+                .password(passwordService.encode(temporaryPassword))
                 .build();
 
-        return toDto(userRepository.save(document));
+        UserDocument savedUser = userRepository.save(document);
+        resendEmailService.sendWelcomeCredentialsEmail(
+                savedUser.getEmail(),
+                buildDisplayName(savedUser),
+                hospital.getName(),
+                temporaryPassword
+        );
+
+        return toDto(savedUser);
+    }
+
+    /**
+     * Devuelve el estado de presencia de un subconjunto de usuarios.
+     */
+    public List<UserPresenceDto> getPresence(List<String> userIds) {
+        List<String> filteredIds = userIds == null ? List.of() : userIds.stream()
+                .filter(id -> id != null && !id.isBlank())
+                .distinct()
+                .toList();
+
+        if (filteredIds.isEmpty()) {
+            return List.of();
+        }
+
+        LocalDateTime threshold = LocalDateTime.now().minusSeconds(45);
+        return filteredIds.stream()
+                .map(userRepository::findById)
+                .flatMap(Optional::stream)
+                .map(user -> UserPresenceDto.builder()
+                        .userId(user.getId())
+                        .online(isUserOnline(user, threshold))
+                        .lastSeenAt(user.getLastSeenAt())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Actualiza el latido del usuario autenticado.
+     */
+    public void heartbeat(String userId) {
+        UserDocument user = requireUser(userId);
+        user.setLastSeenAt(LocalDateTime.now().toString());
+        userRepository.save(user);
     }
 
     /**
@@ -220,6 +272,7 @@ public class UserService {
                 .baseSalary(document.getBaseSalary())
                 .calendarEvents(calendarEvents)
                 .leaveRequests(leaveRequests)
+                .lastSeenAt(document.getLastSeenAt())
                 .createdAt(document.getCreatedAt())
                 .updatedAt(document.getUpdatedAt())
                 .build();
@@ -408,5 +461,24 @@ public class UserService {
      */
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private boolean isUserOnline(UserDocument user, LocalDateTime threshold) {
+        if (user.getLastSeenAt() == null || user.getLastSeenAt().isBlank()) {
+            return false;
+        }
+
+        try {
+            return !LocalDateTime.parse(user.getLastSeenAt()).isBefore(threshold);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private String buildDisplayName(UserDocument user) {
+        String firstName = user.getFirstName() == null ? "" : user.getFirstName().trim();
+        String lastName = user.getLastName() == null ? "" : user.getLastName().trim();
+        String fullName = (firstName + " " + lastName).trim();
+        return fullName.isBlank() ? user.getEmail() : fullName;
     }
 }

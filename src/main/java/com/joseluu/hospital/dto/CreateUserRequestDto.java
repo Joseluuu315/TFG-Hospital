@@ -25,6 +25,5 @@ public class CreateUserRequestDto {
     private String jobTitle;
     @PositiveOrZero(message = "El salario base debe ser mayor o igual a 0")
     private Double baseSalary;
-    @NotBlank(message = "La password es obligatoria")
     private String password;
 }

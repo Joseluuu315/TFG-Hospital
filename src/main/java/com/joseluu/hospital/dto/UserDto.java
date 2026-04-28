@@ -30,6 +30,7 @@ public class UserDto {
     private Double baseSalary;
     private List<CalendarEventDto> calendarEvents;
     private List<LeaveRequestDto> leaveRequests;
+    private String lastSeenAt;
     private String createdAt;
     private String updatedAt;
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
@@ -13,8 +13,7 @@ import {
   type UiChatMessage,
 } from '@/components/chat/chat-models';
 import { useChatPresence } from '@/hooks/use-chat-presence';
-import { Badge } from '@/components/ui/badge';
-import { MessageCircle, Building2, Clock, CheckCircle2, Wifi } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import { chatApi, usersApi, type Chat, type User } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -137,9 +136,6 @@ export default function RootSupportPage() {
     }
   };
 
-  const totalChats = visibleChats.length;
-  const pendingChats = visibleChats.filter((c) => c.unreadCount > 0).length;
-  const resolvedChats = visibleChats.filter((c) => c.unreadCount === 0).length;
   const currentUserId = String(user?.id || '');
   const participants = useMemo(() => buildParticipantDirectory(directoryUsers), [directoryUsers]);
   const trackedPresenceIds = useMemo(
@@ -154,57 +150,8 @@ export default function RootSupportPage() {
       description="Supervisa incidencias y conversaciones con hospitales."
     >
       <div className="space-y-4 sm:space-y-5">
-        {/* Header */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 via-slate-900 to-emerald-950 p-5 text-white shadow-lg sm:p-6">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(16,185,129,0.2),_transparent_55%)]" />
-          <div className="relative flex flex-wrap items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="flex h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
-                <span className="text-xs font-medium uppercase tracking-widest text-emerald-300">Sede central</span>
-              </div>
-              <h1 className="text-xl font-semibold">Soporte hospitalario</h1>
-              <p className="text-sm text-slate-400">Actualizacion cada 4 segundos</p>
-            </div>
-            <Badge className="rounded-full border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-emerald-300 hover:bg-emerald-500/20">
-              <Wifi className="mr-1.5 h-3 w-3" />
-              Canales activos
-            </Badge>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid gap-3 md:grid-cols-3">
-          <StatCard
-              title="Hospitales conectados"
-              value={totalChats}
-              hint="Canales activos"
-              icon={<Building2 className="h-4 w-4" />}
-              color="slate"
-          />
-          <StatCard
-              title="Pendientes"
-              value={pendingChats}
-              hint="Con mensajes sin leer"
-              icon={<Clock className="h-4 w-4" />}
-              color="amber"
-          />
-          <StatCard
-              title="Resueltos"
-              value={resolvedChats}
-              hint="Sin alertas abiertas"
-              icon={<CheckCircle2 className="h-4 w-4" />}
-              color="emerald"
-          />
-        </div>
-
-        {/* Chat area */}
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-3.5">
-            <p className="font-medium text-slate-800">Canales de soporte</p>
-            <p className="text-xs text-slate-400">Conversaciones entre administradores y sede central</p>
-          </div>
-          <div className="flex flex-col overflow-hidden lg:h-[calc(100vh-26rem)] lg:flex-row">
+          <div className="flex flex-col overflow-hidden lg:h-[calc(100dvh-11rem)] lg:flex-row">
             <div className="max-h-96 w-full flex-shrink-0 overflow-hidden border-b border-slate-100 lg:max-h-none lg:w-[23rem] lg:border-b-0 lg:border-r">
               <ChatSidebar
                   chats={visibleChats}
@@ -254,32 +201,5 @@ export default function RootSupportPage() {
         />
       </div>
     </DashboardShell>
-  );
-}
-
-function StatCard({
-                    title, value, hint, icon, color,
-                  }: {
-  title: string;
-  value: number;
-  hint: string;
-  icon: ReactNode;
-  color: 'slate' | 'amber' | 'emerald';
-}) {
-  const colors = {
-    slate:   { bg: 'bg-slate-50',   icon: 'bg-slate-100 text-slate-500',   value: 'text-slate-800' },
-    amber:   { bg: 'bg-amber-50',   icon: 'bg-amber-100 text-amber-600',   value: 'text-amber-700' },
-    emerald: { bg: 'bg-emerald-50', icon: 'bg-emerald-100 text-emerald-600', value: 'text-emerald-700' },
-  }[color];
-
-  return (
-      <div className={`rounded-2xl border border-slate-200 ${colors.bg} p-4`}>
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{title}</p>
-          <div className={`rounded-lg p-1.5 ${colors.icon}`}>{icon}</div>
-        </div>
-        <p className={`mt-2 text-3xl font-bold ${colors.value}`}>{value}</p>
-        <p className="mt-0.5 text-xs text-slate-400">{hint}</p>
-      </div>
   );
 }

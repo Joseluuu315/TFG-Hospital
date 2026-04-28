@@ -7,6 +7,7 @@ import com.joseluu.hospital.dto.LeaveRequestDto;
 import com.joseluu.hospital.dto.LeaveRequestRequestDto;
 import com.joseluu.hospital.dto.UpdateUserRequestDto;
 import com.joseluu.hospital.dto.UserDto;
+import com.joseluu.hospital.dto.UserPresenceDto;
 import com.joseluu.hospital.service.AuthService;
 import com.joseluu.hospital.service.LeaveRequestService;
 import com.joseluu.hospital.service.UserService;
@@ -50,6 +51,14 @@ public class UsersController {
     @GetMapping("/{id}")
     public UserDto getById(@PathVariable String id) {
         return userService.getById(id);
+    }
+
+    /**
+     * Devuelve el estado de presencia de los usuarios indicados.
+     */
+    @GetMapping("/presence")
+    public List<UserPresenceDto> getPresence(@RequestParam(name = "ids") List<String> userIds) {
+        return userService.getPresence(userIds);
     }
 
     /**
@@ -105,6 +114,16 @@ public class UsersController {
             @RequestBody UpdateUserRequestDto request) {
         UserDto user = authService.getUserFromBearer(authorization);
         return userService.updateUser(user.getId(), request);
+    }
+
+    /**
+     * Registra actividad reciente del usuario autenticado.
+     */
+    @PostMapping("/me/presence")
+    public ResponseEntity<Void> heartbeat(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        UserDto user = authService.getUserFromBearer(authorization);
+        userService.heartbeat(user.getId());
+        return ResponseEntity.noContent().build();
     }
 
     /** Añade un evento de calendario a un trabajador (uso admin). */

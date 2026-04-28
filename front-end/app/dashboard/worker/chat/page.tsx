@@ -208,7 +208,7 @@ export default function WorkerChatPage() {
           </Button>
         </div>
 
-        <div className="flex min-h-[72dvh] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm lg:h-[calc(100dvh-14rem)]">
+        <div className="flex min-h-[72dvh] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm lg:h-[calc(100dvh-10.5rem)]">
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-sm">

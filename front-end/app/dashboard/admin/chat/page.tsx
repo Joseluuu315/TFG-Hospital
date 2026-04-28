@@ -16,7 +16,6 @@ import { ChatInfoSheet } from '@/components/chat/chat-info-sheet';
 import { NewChatDialog } from '@/components/chat/new-chat-dialog';
 import { useChatPresence } from '@/hooks/use-chat-presence';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -232,7 +231,6 @@ export default function AdminChatPage() {
     } catch (error) { console.error('Error actualizando miembros', error); toast.error('No se pudieron guardar los cambios del grupo.'); }
   };
 
-  const connectedGroups = workGroups.filter((g) => chats.some((c) => c.id === g.chatId)).length;
   const unreadChats = chats.filter((c) => c.unreadCount > 0).length;
   const currentUserId = String(user?.id || '');
   const participants = useMemo(() => buildParticipantDirectory(directoryUsers), [directoryUsers]);
@@ -261,29 +259,6 @@ export default function AdminChatPage() {
             </Link>
           </Button>
         </div>
-        {/* Header banner */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-cyan-900 p-5 text-white shadow-lg sm:p-6">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(34,211,238,0.15),_transparent_60%)]" />
-          <div className="relative flex flex-wrap items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="flex h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.8)]" />
-                <span className="text-xs font-medium uppercase tracking-widest text-cyan-300">Mensajeria interna</span>
-              </div>
-              <h1 className="text-xl font-semibold tracking-tight">Comunicaciones del hospital</h1>
-            </div>
-            <div className="grid w-full grid-cols-2 gap-3 sm:w-auto">
-              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-center backdrop-blur">
-                <p className="text-2xl font-bold">{chats.length}</p>
-                <p className="text-xs text-slate-400">{unreadChats} pendientes</p>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-center backdrop-blur">
-                <p className="text-2xl font-bold">{connectedGroups}</p>
-                <p className="text-xs text-slate-400">grupos activos</p>
-              </div>
-            </div>
-          </div>
-        </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-xl bg-slate-100 p-1">
@@ -304,7 +279,7 @@ export default function AdminChatPage() {
 
           {/* TAB: CHAT */}
           <TabsContent value="chat" className="mt-4">
-            <div className="flex min-h-[72dvh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:h-[calc(100dvh-17rem)] lg:flex-row">
+            <div className="flex min-h-[72dvh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:h-[calc(100dvh-11.5rem)] lg:flex-row">
               <div className="max-h-96 w-full shrink-0 overflow-hidden border-b border-slate-100 lg:max-h-none lg:w-[23rem] lg:border-b-0 lg:border-r">
                 <ChatSidebar
                     chats={chats}

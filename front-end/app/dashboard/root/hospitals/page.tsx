@@ -162,7 +162,7 @@ export default function HospitalsPage() {
         toast.success('Hospital actualizado correctamente');
       } else {
         await hospitalsApi.create(formData);
-        toast.success('Hospital creado correctamente');
+        toast.success('Hospital creado correctamente y acceso inicial enviado por correo');
         await fetchHospitals();
       }
       closeFormDialog();

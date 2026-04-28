@@ -65,6 +65,8 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciales invalidas");
         }
         migratePasswordIfNeeded(userDocument, request.getPassword());
+        userDocument.setLastSeenAt(java.time.LocalDateTime.now().toString());
+        userRepository.save(userDocument);
 
         return createSession(loadUser(userDocument.getId()));
     }

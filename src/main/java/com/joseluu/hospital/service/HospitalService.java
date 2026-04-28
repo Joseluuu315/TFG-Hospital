@@ -41,6 +41,8 @@ public class HospitalService {
     private final HospitalSettingsService hospitalSettingsService;
     private final AuditLogService auditLogService;
     private final ShiftTypeService shiftTypeService;
+    private final PasswordService passwordService;
+    private final ResendEmailService resendEmailService;
 
     public HospitalService(HospitalRepository hospitalRepository,
                            UserRepository userRepository,
@@ -52,7 +54,9 @@ public class HospitalService {
                            ChatMessageRepository chatMessageRepository,
                            HospitalSettingsService hospitalSettingsService,
                            AuditLogService auditLogService,
-                           ShiftTypeService shiftTypeService) {
+                           ShiftTypeService shiftTypeService,
+                           PasswordService passwordService,
+                           ResendEmailService resendEmailService) {
         this.hospitalRepository = hospitalRepository;
         this.userRepository = userRepository;
         this.notificationService = notificationService;
@@ -64,6 +68,8 @@ public class HospitalService {
         this.hospitalSettingsService = hospitalSettingsService;
         this.auditLogService = auditLogService;
         this.shiftTypeService = shiftTypeService;
+        this.passwordService = passwordService;
+        this.resendEmailService = resendEmailService;
     }
 
     /**
@@ -88,6 +94,10 @@ public class HospitalService {
      * Crea un hospital con configuracion inicial.
      */
     public HospitalDto create(CreateHospitalRequestDto request) {
+        if (request.getAdminEmail() != null && !request.getAdminEmail().isBlank()) {
+            resendEmailService.assertConfigured();
+        }
+
         LocalDateTime now = LocalDateTime.now();
         String hospitalId = UUID.randomUUID().toString();
 
@@ -293,13 +303,14 @@ public class HospitalService {
         String[] nameParts = getNameParts(adminEmail);
         String firstName = buildAdminFirstName(nameParts);
         String lastName = buildAdminLastName(nameParts, hospital.getName());
+        String temporaryPassword = passwordService.generateTemporaryPassword();
 
         UserDocument admin = UserDocument.builder()
                 .id(UUID.randomUUID().toString())
                 .firstName(firstName)
                 .lastName(lastName)
                 .email(adminEmail)
-                .password("admin123")
+                .password(passwordService.encode(temporaryPassword))
                 .role(UserRole.HOSPITAL_ADMIN)
                 .enabled(true)
                 .accountNonLocked(true)
@@ -307,15 +318,22 @@ public class HospitalService {
                 .hospitalName(hospital.getName())
                 .department("Administracion")
                 .jobTitle("Administrador del hospital")
+                .lastSeenAt(null)
                 .createdAt(now.toString())
                 .updatedAt(now.toString())
                 .build();
 
         userRepository.save(admin);
+        resendEmailService.sendWelcomeCredentialsEmail(
+                admin.getEmail(),
+                (admin.getFirstName() + " " + admin.getLastName()).trim(),
+                hospital.getName(),
+                temporaryPassword
+        );
         notificationService.createNotification(
                 admin.getId(),
                 NotificationType.NEW_ANNOUNCEMENT,
-                "Cuenta inicial creada. Credenciales temporales: " + adminEmail + " / admin123"
+                "Cuenta inicial creada. Se ha enviado el acceso temporal al correo corporativo."
         );
     }
 

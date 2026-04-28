@@ -36,7 +36,7 @@ public class ResendEmailService {
      * Envia el email de recuperacion con el enlace de restablecimiento.
      */
     public void sendPasswordResetEmail(String recipientEmail, String recipientName, String resetLink) {
-        ensureConfigured();
+        assertConfigured();
         String payload = """
                 {
                   "from":"%s",
@@ -78,7 +78,60 @@ public class ResendEmailService {
         }
     }
 
-    private void ensureConfigured() {
+    /**
+     * Envia las credenciales iniciales de acceso a una cuenta nueva.
+     */
+    public void sendWelcomeCredentialsEmail(String recipientEmail,
+                                            String recipientName,
+                                            String hospitalName,
+                                            String temporaryPassword) {
+        assertConfigured();
+        String payload = """
+                {
+                  "from":"%s",
+                  "to":["%s"],
+                  "subject":"Tus credenciales de acceso",
+                  "html":"%s",
+                  "text":"%s"
+                }
+                """.formatted(
+                escapeJson(from),
+                escapeJson(recipientEmail),
+                escapeJson(buildWelcomeHtml(recipientName, recipientEmail, hospitalName, temporaryPassword)),
+                escapeJson(buildWelcomeText(recipientName, recipientEmail, hospitalName, temporaryPassword))
+        );
+
+        sendEmail(payload, "No se pudo enviar el correo de bienvenida");
+    }
+
+    private void sendEmail(String payload, String genericErrorMessage) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(RESEND_ENDPOINT))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .header("User-Agent", "TFG-Hospital/1.0")
+                    .POST(HttpRequest.BodyPublishers.ofString(payload))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 400) {
+                throw new ResponseStatusException(
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        genericErrorMessage + ": " + extractError(response.body())
+                );
+            }
+        } catch (IOException | InterruptedException exception) {
+            if (exception instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    genericErrorMessage
+            );
+        }
+    }
+
+    public void assertConfigured() {
         if (apiKey == null || apiKey.isBlank()) {
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR,
@@ -136,5 +189,43 @@ public class ResendEmailService {
                 Si no has solicitado este cambio, puedes ignorar este correo.
                 El enlace caduca en 60 minutos.
                 """.formatted(safeName, resetLink);
+    }
+
+    private String buildWelcomeHtml(String recipientName,
+                                    String loginEmail,
+                                    String hospitalName,
+                                    String temporaryPassword) {
+        String safeName = recipientName == null || recipientName.isBlank() ? "usuario" : recipientName;
+        String safeHospitalName = hospitalName == null || hospitalName.isBlank() ? "la plataforma" : hospitalName;
+        return """
+                <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;max-width:560px;margin:0 auto;padding:24px">
+                  <h2 style="margin:0 0 16px">Acceso inicial activado</h2>
+                  <p>Hola %s,</p>
+                  <p>Se ha creado tu cuenta de acceso para %s.</p>
+                  <div style="margin:16px 0;padding:16px;border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb">
+                    <p style="margin:0 0 8px"><strong>Usuario:</strong> %s</p>
+                    <p style="margin:0"><strong>Contrasena temporal:</strong> %s</p>
+                  </div>
+                  <p>Te recomendamos iniciar sesion cuanto antes y cambiar la contrasena desde tu perfil.</p>
+                </div>
+                """.formatted(safeName, safeHospitalName, loginEmail, temporaryPassword);
+    }
+
+    private String buildWelcomeText(String recipientName,
+                                    String loginEmail,
+                                    String hospitalName,
+                                    String temporaryPassword) {
+        String safeName = recipientName == null || recipientName.isBlank() ? "usuario" : recipientName;
+        String safeHospitalName = hospitalName == null || hospitalName.isBlank() ? "la plataforma" : hospitalName;
+        return """
+                Hola %s,
+
+                Se ha creado tu cuenta de acceso para %s.
+
+                Usuario: %s
+                Contrasena temporal: %s
+
+                Te recomendamos iniciar sesion y cambiar la contrasena cuanto antes desde tu perfil.
+                """.formatted(safeName, safeHospitalName, loginEmail, temporaryPassword);
     }
 }

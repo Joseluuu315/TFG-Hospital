@@ -192,7 +192,7 @@ export default function WorkersPage() {
       hospitalId,
     };
 
-    if (includePassword || formData.password) {
+    if ((includePassword && formData.password.trim()) || formData.password.trim()) {
       payload.password = formData.password;
     }
 
@@ -203,8 +203,8 @@ export default function WorkersPage() {
     event.preventDefault();
     setIsSubmitting(true);
     try {
-      await usersApi.create(buildWorkerPayload(true) as Partial<User> & { password: string; hospitalId: string });
-      toast.success('Trabajador creado correctamente');
+      await usersApi.create(buildWorkerPayload(true));
+      toast.success('Trabajador creado correctamente y credenciales enviadas por correo');
       closeCreateDialog();
       await fetchWorkers();
     } catch (error) {
@@ -401,30 +401,28 @@ export default function WorkersPage() {
         <Input id="baseSalary" type="number" value={formData.baseSalary} onChange={(event) => updateForm('baseSalary', event.target.value)} required />
       </Field>
       <Field>
-        <div>
-          <FieldLabel htmlFor="password">Contraseña inicial</FieldLabel>
-          <Input
+        {isEditMode ? (
+          <div>
+            <FieldLabel htmlFor="password">Nueva contrasena</FieldLabel>
+            <Input
               id="password"
               type="password"
               value={formData.password}
               onChange={(event) => handlePasswordChange(event.target.value, isEditMode)}
-              placeholder={
-                isEditMode
-                    ? 'Dejar en blanco si no cambia'
-                    : 'Mínimo 10 caracteres, mayúscula, número y símbolo'
-              }
-              required={!isEditMode}
+              placeholder="Dejar en blanco si no cambia"
               className={passwordError ? 'border-red-500 focus-visible:ring-red-500' : ''}
-          />
-
-
-          {/* Feedback visual para el usuario */}
-          {passwordError && (
+            />
+            {passwordError && (
               <p style={{ color: 'red', fontSize: '12px', marginTop: '5px' }}>
                 {passwordError}
               </p>
-          )}
-        </div>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            El sistema generara una contrasena temporal y enviara las credenciales al correo del trabajador.
+          </div>
+        )}
       </Field>
     </FieldGroup>
   );
@@ -466,7 +464,7 @@ export default function WorkersPage() {
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Contratar trabajador</DialogTitle>
-              <DialogDescription>El alta se registrará en el hospital actual con su usuario y acceso inicial.</DialogDescription>
+              <DialogDescription>El alta se registrará en el hospital actual y las credenciales temporales se enviarán por correo.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleCreateWorker}>
               {renderWorkerFormFields(false)}
