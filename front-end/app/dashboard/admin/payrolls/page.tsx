@@ -30,6 +30,7 @@ import {
   type PayrollItem,
   type User,
 } from '@/lib/api';
+import { downloadBlobResponse } from '@/lib/download';
 import { toast } from 'sonner';
 import { formatCurrency, formatMonthYear } from '@/lib/formatters';
 
@@ -143,8 +144,10 @@ export default function PayrollsPage() {
 
   const handleDownload = async (payroll: Payroll) => {
     try {
-      await payrollsApi.downloadPdf(payroll.id);
-      toast.success('Descarga iniciada');
+      const response = await payrollsApi.downloadPdf(payroll.id);
+      const fallbackFilename = `nomina-${payroll.workerFullName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${payroll.period}.pdf`;
+      downloadBlobResponse(response, fallbackFilename);
+      toast.success('PDF descargado');
     } catch (error) {
       console.error(error);
       toast.error('No se pudo descargar el PDF');
@@ -333,7 +336,52 @@ export default function PayrollsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="grid gap-3 md:hidden">
+            {filteredPayrolls.map((payroll) => (
+              <div key={payroll.id} className="rounded-xl border bg-background/70 p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold">{payroll.workerFullName}</p>
+                    <p className="text-sm text-muted-foreground">{formatMonthYear(`${payroll.period}-01`)}</p>
+                  </div>
+                  {getStatusBadge(payroll.status)}
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Bruto</p>
+                    <p className="font-medium">{formatCurrency(payroll.grossSalary)}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Neto</p>
+                    <p className="font-medium text-emerald-600">{formatCurrency(payroll.netSalary)}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-muted-foreground">Deducciones</p>
+                    <p className="font-medium">{formatCurrency(payroll.socialSecurityWorker + payroll.incomeTaxWithholding + payroll.otherDeductions)}</p>
+                  </div>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => void openPayrollDetail(payroll)}>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Ver detalle
+                  </Button>
+                  {payroll.status === 'DRAFT' ? (
+                    <Button className="flex-1" onClick={() => void handlePublishPayroll(payroll.id)} disabled={isPublishing === payroll.id}>
+                      <Send className="mr-2 h-4 w-4" />
+                      Emitir
+                    </Button>
+                  ) : (
+                    <Button className="flex-1" onClick={() => void handleDownload(payroll)}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Descargar
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <Table className="min-w-[860px]">
               <TableHeader>
                 <TableRow>
@@ -351,9 +399,9 @@ export default function PayrollsPage() {
                   <TableRow key={payroll.id}>
                     <TableCell className="font-medium">{payroll.workerFullName}</TableCell>
                     <TableCell>{formatMonthYear(`${payroll.period}-01`)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(payroll.grossSalary)}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">-{formatCurrency(payroll.socialSecurityWorker + payroll.incomeTaxWithholding + payroll.otherDeductions)}</TableCell>
-                    <TableCell className="text-right font-medium text-emerald-600">{formatCurrency(payroll.netSalary)}</TableCell>
+                    <TableCell className="text-right whitespace-nowrap">{formatCurrency(payroll.grossSalary)}</TableCell>
+                    <TableCell className="text-right whitespace-nowrap text-muted-foreground">{formatCurrency(payroll.socialSecurityWorker + payroll.incomeTaxWithholding + payroll.otherDeductions)}</TableCell>
+                    <TableCell className="text-right whitespace-nowrap font-medium text-emerald-600">{formatCurrency(payroll.netSalary)}</TableCell>
                     <TableCell>{getStatusBadge(payroll.status)}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
@@ -380,14 +428,14 @@ export default function PayrollsPage() {
       </Card>
 
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="w-[min(96vw,1100px)] max-w-5xl max-h-[90vh] overflow-hidden p-0">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="px-6 pt-6">
               Detalle de nómina {selectedPayroll ? `- ${selectedPayroll.workerFullName} (${formatMonthYear(`${selectedPayroll.period}-01`)})` : ''}
             </DialogTitle>
           </DialogHeader>
           {selectedPayroll && (
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto px-6 pb-6">
               <div className="grid gap-4 md:grid-cols-3">
                 <Card>
                   <CardHeader className="pb-2"><CardTitle className="text-sm">Bruto</CardTitle></CardHeader>
@@ -409,8 +457,8 @@ export default function PayrollsPage() {
                 <CardHeader>
                   <CardTitle>Líneas de cálculo</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <Table>
+                <CardContent className="overflow-x-auto">
+                  <Table className="min-w-[760px]">
                     <TableHeader>
                       <TableRow>
                         <TableHead>Concepto</TableHead>
@@ -428,10 +476,10 @@ export default function PayrollsPage() {
                         </TableRow>
                       ) : selectedItems.map((item) => (
                         <TableRow key={item.id}>
-                          <TableCell className="font-medium">{item.description}</TableCell>
-                          <TableCell className="text-right">{item.quantity}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.unitAmount)}</TableCell>
-                          <TableCell className={`text-right font-medium ${item.totalAmount >= 0 ? 'text-foreground' : 'text-destructive'}`}>
+                          <TableCell className="max-w-[420px] whitespace-normal break-words font-medium">{item.description}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap">{item.quantity}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap">{formatCurrency(item.unitAmount)}</TableCell>
+                          <TableCell className={`text-right whitespace-nowrap font-medium ${item.totalAmount >= 0 ? 'text-foreground' : 'text-destructive'}`}>
                             {formatCurrency(item.totalAmount)}
                           </TableCell>
                         </TableRow>

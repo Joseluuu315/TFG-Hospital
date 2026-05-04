@@ -261,7 +261,7 @@ export default function WorkerDashboard() {
                           className="flex flex-col gap-3 rounded-lg border bg-background/70 p-3 transition hover:border-muted-foreground/20 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="min-w-[50px] text-center">
+                            <div className="w-14 shrink-0 text-center">
                               <p className="text-xs text-muted-foreground">{formatWeekday(eventDate)}</p>
                               <p className="text-lg font-bold">{eventDate.getDate()}</p>
                             </div>

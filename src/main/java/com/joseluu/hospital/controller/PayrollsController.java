@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -74,10 +75,26 @@ public class PayrollsController {
      */
     @GetMapping("/{id}/pdf")
     public ResponseEntity<byte[]> downloadPdf(@PathVariable String id) {
+        PayrollDto payroll = payrollService.getById(id);
         byte[] content = payrollService.generatePdf(id);
+        String filename = "nomina-" + sanitizeFilename(payroll.getWorkerFullName()) + "-" + payroll.getPeriod() + ".pdf";
+
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .body(content);
+    }
+
+    /**
+     * Genera un nombre de archivo seguro para la descarga.
+     */
+    private String sanitizeFilename(String value) {
+        if (value == null || value.isBlank()) {
+            return "trabajador";
+        }
+        return value.toLowerCase()
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("(^-|-$)", "");
     }
 
     /**

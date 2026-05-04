@@ -26,8 +26,10 @@ import com.joseluu.hospital.repository.WorkerContractRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -87,7 +89,7 @@ public class AdvancedPayrollService {
         PayrollDocument payroll = buildPayroll(worker, hospitalId, period, breakdown, bonuses, penalties);
         PayrollDocument savedPayroll = payrollRepository.save(payroll);
 
-        replacePayrollItems(savedPayroll.getId(), hospitalId, workerId, contract, breakdown, bonuses, penalties);
+        replacePayrollItems(savedPayroll.getId(), hospitalId, workerId, contract, breakdown, adjustments);
         notificationService.createNotification(workerId, NotificationType.PAYROLL_GENERATED, "Se ha generado la nomina del periodo " + period);
         auditLogService.log(
                 hospitalId,
@@ -251,14 +253,13 @@ public class AdvancedPayrollService {
                                      String workerId,
                                      WorkerContractDocument contract,
                                      PayrollBreakdown breakdown,
-                                     double bonuses,
-                                     double penalties) {
+                                     List<PayrollAdjustmentDocument> adjustments) {
         List<PayrollItemDocument> existingItems = payrollItemRepository.findByPayrollId(payrollId);
         if (!existingItems.isEmpty()) {
             payrollItemRepository.deleteAll(existingItems);
         }
 
-        payrollItemRepository.saveAll(buildItems(payrollId, hospitalId, workerId, contract, breakdown, bonuses, penalties));
+        payrollItemRepository.saveAll(buildItems(payrollId, hospitalId, workerId, contract, breakdown, adjustments));
     }
 
     /**
@@ -274,25 +275,44 @@ public class AdvancedPayrollService {
             LocalDateTime end = LocalDateTime.parse(shift.getEndAt());
             double hours = Duration.between(start, end).toHours();
 
+            breakdown.shiftCount++;
             breakdown.baseHours += hours;
             breakdown.basePay += hours * contract.getHourlyRate();
 
             if ("NIGHT".equalsIgnoreCase(shift.getShiftTypeCode())) {
+                breakdown.nightShiftCount++;
+                breakdown.nightHours += hours;
                 breakdown.nightBonus += hours * contract.getHourlyRate() * contract.getNightBonusPct();
             }
             if (start.getDayOfWeek().getValue() >= 6) {
+                breakdown.weekendShiftCount++;
+                breakdown.weekendHours += hours;
                 breakdown.holidayBonus += hours * contract.getHourlyRate() * contract.getHolidayBonusPct();
             }
         }
 
         double monthlyExpectedHours = contract.getWeeklyHours() * 4.0d;
         if (breakdown.baseHours > monthlyExpectedHours) {
-            double overtimeHours = breakdown.baseHours - monthlyExpectedHours;
-            breakdown.overtimePremium = overtimeHours * contract.getHourlyRate() * (contract.getOvertimeMultiplier() - 1.0d);
+            breakdown.overtimeHours = breakdown.baseHours - monthlyExpectedHours;
+            breakdown.overtimePremium = breakdown.overtimeHours * contract.getHourlyRate() * (contract.getOvertimeMultiplier() - 1.0d);
         }
 
-        long unpaidDays = absences.stream().filter(item -> !item.isPaid()).count();
-        breakdown.unpaidAbsenceDeduction = unpaidDays * 8.0d * contract.getHourlyRate();
+        for (LeaveRequestDocument absence : absences) {
+            long leaveDays = ChronoUnit.DAYS.between(
+                    LocalDate.parse(absence.getStartDate()),
+                    LocalDate.parse(absence.getEndDate())
+            ) + 1L;
+
+            if (absence.isPaid()) {
+                breakdown.paidLeaveDays += leaveDays;
+                breakdown.paidLeaveDetails.add(formatLeaveDetail(absence, leaveDays));
+            } else {
+                breakdown.unpaidLeaveDays += leaveDays;
+                breakdown.unpaidLeaveDetails.add(formatLeaveDetail(absence, leaveDays));
+            }
+        }
+
+        breakdown.unpaidAbsenceDeduction = breakdown.unpaidLeaveDays * 8.0d * contract.getHourlyRate();
         return breakdown;
     }
 
@@ -304,26 +324,57 @@ public class AdvancedPayrollService {
                                                  String workerId,
                                                  WorkerContractDocument contract,
                                                  PayrollBreakdown breakdown,
-                                                 double bonuses,
-                                                 double penalties) {
+                                                 List<PayrollAdjustmentDocument> adjustments) {
         List<PayrollItemDocument> items = new ArrayList<>();
-        items.add(item(payrollId, hospitalId, workerId, PayrollItemType.BASE_HOURS, "Horas base",
-                breakdown.baseHours, contract.getHourlyRate(), round(breakdown.basePay)));
+        items.add(item(
+                payrollId,
+                hospitalId,
+                workerId,
+                PayrollItemType.BASE_HOURS,
+                buildBaseHoursDescription(breakdown),
+                breakdown.baseHours,
+                contract.getHourlyRate(),
+                round(breakdown.basePay)
+        ));
+
+        addNeutralItem(items, payrollId, hospitalId, workerId, PayrollItemType.PAID_LEAVE,
+                buildPaidLeaveDescription(breakdown), breakdown.paidLeaveDays);
 
         addPositiveItem(items, payrollId, hospitalId, workerId, PayrollItemType.NIGHT_BONUS,
-                "Plus nocturnidad", breakdown.nightBonus);
+                buildNightBonusDescription(breakdown), breakdown.nightBonus);
         addPositiveItem(items, payrollId, hospitalId, workerId, PayrollItemType.HOLIDAY_BONUS,
-                "Plus festivo o fin de semana", breakdown.holidayBonus);
+                buildHolidayBonusDescription(breakdown), breakdown.holidayBonus);
         addPositiveItem(items, payrollId, hospitalId, workerId, PayrollItemType.OVERTIME,
-                "Horas extra", breakdown.overtimePremium);
+                buildOvertimeDescription(contract, breakdown), breakdown.overtimePremium);
         addNegativeItem(items, payrollId, hospitalId, workerId, PayrollItemType.UNPAID_ABSENCE,
-                "Ausencias no remuneradas", breakdown.unpaidAbsenceDeduction);
-        addPositiveItem(items, payrollId, hospitalId, workerId, PayrollItemType.MANUAL_BONUS,
-                "Bonificaciones manuales", bonuses);
-        addNegativeItem(items, payrollId, hospitalId, workerId, PayrollItemType.MANUAL_PENALTY,
-                "Penalizaciones manuales", penalties);
+                buildUnpaidLeaveDescription(breakdown), breakdown.unpaidAbsenceDeduction);
+
+        for (PayrollAdjustmentDocument adjustment : adjustments) {
+            if (adjustment.getType() == PayrollAdjustmentType.BONUS) {
+                addPositiveItem(items, payrollId, hospitalId, workerId, PayrollItemType.MANUAL_BONUS,
+                        "Ajuste manual: " + adjustment.getDescription(), adjustment.getAmount());
+            } else if (adjustment.getType() == PayrollAdjustmentType.PENALTY) {
+                addNegativeItem(items, payrollId, hospitalId, workerId, PayrollItemType.MANUAL_PENALTY,
+                        "Ajuste manual: " + adjustment.getDescription(), adjustment.getAmount());
+            }
+        }
 
         return items;
+    }
+
+    /**
+     * Agrega una linea informativa con importe cero.
+     */
+    private void addNeutralItem(List<PayrollItemDocument> items,
+                                String payrollId,
+                                String hospitalId,
+                                String workerId,
+                                PayrollItemType type,
+                                String description,
+                                double quantity) {
+        if (quantity > 0) {
+            items.add(item(payrollId, hospitalId, workerId, type, description, quantity, 0, 0));
+        }
     }
 
     /**
@@ -440,6 +491,83 @@ public class AdvancedPayrollService {
     }
 
     /**
+     * Describe las horas base incluidas en la nomina.
+     */
+    private String buildBaseHoursDescription(PayrollBreakdown breakdown) {
+        return "Horas base planificadas o trabajadas (" + round(breakdown.baseHours) + "h en "
+                + breakdown.shiftCount + " turnos)";
+    }
+
+    /**
+     * Describe las vacaciones o ausencias pagadas aprobadas.
+     */
+    private String buildPaidLeaveDescription(PayrollBreakdown breakdown) {
+        if (breakdown.paidLeaveDays <= 0) {
+            return "Sin ausencias remuneradas aprobadas";
+        }
+        return "Dias solicitados remunerados: " + String.join("; ", breakdown.paidLeaveDetails);
+    }
+
+    /**
+     * Describe la nocturnidad aplicada.
+     */
+    private String buildNightBonusDescription(PayrollBreakdown breakdown) {
+        return "Plus nocturnidad por " + breakdown.nightShiftCount + " turnos / "
+                + round(breakdown.nightHours) + "h nocturnas";
+    }
+
+    /**
+     * Describe el plus de festivos o fines de semana.
+     */
+    private String buildHolidayBonusDescription(PayrollBreakdown breakdown) {
+        return "Plus festivo o fin de semana por " + breakdown.weekendShiftCount + " turnos / "
+                + round(breakdown.weekendHours) + "h";
+    }
+
+    /**
+     * Describe el exceso de horas sobre la jornada prevista.
+     */
+    private String buildOvertimeDescription(WorkerContractDocument contract, PayrollBreakdown breakdown) {
+        double expectedHours = contract.getWeeklyHours() * 4.0d;
+        return "Horas extra: " + round(breakdown.overtimeHours) + "h por encima de "
+                + round(expectedHours) + "h previstas";
+    }
+
+    /**
+     * Describe los dias solicitados no remunerados.
+     */
+    private String buildUnpaidLeaveDescription(PayrollBreakdown breakdown) {
+        if (breakdown.unpaidLeaveDays <= 0) {
+            return "Sin ausencias no remuneradas";
+        }
+        return "Dias solicitados no remunerados: " + String.join("; ", breakdown.unpaidLeaveDetails);
+    }
+
+    /**
+     * Construye un resumen legible de una solicitud de ausencia.
+     */
+    private String formatLeaveDetail(LeaveRequestDocument request, long leaveDays) {
+        return translateLeaveType(request.getLeaveType()) + " del " + request.getStartDate() + " al "
+                + request.getEndDate() + " (" + leaveDays + " dias)";
+    }
+
+    /**
+     * Traduce tipos de ausencia comunes a texto legible.
+     */
+    private String translateLeaveType(String leaveType) {
+        if ("VACATION".equalsIgnoreCase(leaveType)) {
+            return "vacaciones";
+        }
+        if ("PERSONAL".equalsIgnoreCase(leaveType)) {
+            return "asuntos propios";
+        }
+        if ("SICK_LEAVE".equalsIgnoreCase(leaveType)) {
+            return "baja";
+        }
+        return leaveType == null ? "ausencia" : leaveType.toLowerCase();
+    }
+
+    /**
      * Redondea un valor a dos decimales.
      */
     private double round(double value) {
@@ -456,11 +584,21 @@ public class AdvancedPayrollService {
      * Clase auxiliar con el desglose intermedio del calculo.
      */
     private static class PayrollBreakdown {
+        private int shiftCount;
         private double baseHours;
         private double basePay;
+        private int nightShiftCount;
+        private double nightHours;
         private double nightBonus;
+        private int weekendShiftCount;
+        private double weekendHours;
         private double holidayBonus;
+        private double overtimeHours;
         private double overtimePremium;
+        private long paidLeaveDays;
+        private final List<String> paidLeaveDetails = new ArrayList<>();
+        private long unpaidLeaveDays;
+        private final List<String> unpaidLeaveDetails = new ArrayList<>();
         private double unpaidAbsenceDeduction;
     }
 }

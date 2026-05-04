@@ -68,6 +68,7 @@ export type ShiftAssignmentStatus = 'ASSIGNED' | 'WORKED' | 'CANCELLED';
 export type PayrollAdjustmentType = 'BONUS' | 'PENALTY';
 export type PayrollItemType =
   | 'BASE_HOURS'
+  | 'PAID_LEAVE'
   | 'NIGHT_BONUS'
   | 'HOLIDAY_BONUS'
   | 'OVERTIME'
@@ -476,7 +477,7 @@ export const payrollsApi = {
   getById: (id: string) => api.get<Payroll>(`/payrolls/${id}`),
   create: (data: Partial<Payroll>) => api.post<Payroll>('/payrolls', data),
   updateStatus: (id: string, status: PayrollStatus) => api.patch<Payroll>(`/payrolls/${id}/status`, { status }),
-  downloadPdf: (id: string) => api.get(`/payrolls/${id}/pdf`, { responseType: 'blob' }),
+  downloadPdf: (id: string) => api.get<Blob>(`/payrolls/${id}/pdf`, { responseType: 'blob' }),
 };
 
 export const advancedPayrollApi = {

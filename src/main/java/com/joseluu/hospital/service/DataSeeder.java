@@ -40,7 +40,9 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -65,6 +67,7 @@ public class DataSeeder implements ApplicationRunner {
     private final WorkerContractRepository workerContractRepository;
     private final PayrollAdjustmentRepository payrollAdjustmentRepository;
     private final PayrollItemRepository payrollItemRepository;
+    private final AdvancedPayrollService advancedPayrollService;
 
     private String hospitalId;
     private String rootId;
@@ -87,7 +90,8 @@ public class DataSeeder implements ApplicationRunner {
                        ShiftAssignmentRepository shiftAssignmentRepository,
                        WorkerContractRepository workerContractRepository,
                        PayrollAdjustmentRepository payrollAdjustmentRepository,
-                       PayrollItemRepository payrollItemRepository) {
+                       PayrollItemRepository payrollItemRepository,
+                       AdvancedPayrollService advancedPayrollService) {
         this.hospitalRepository = hospitalRepository;
         this.userRepository = userRepository;
         this.payrollRepository = payrollRepository;
@@ -101,6 +105,7 @@ public class DataSeeder implements ApplicationRunner {
         this.workerContractRepository = workerContractRepository;
         this.payrollAdjustmentRepository = payrollAdjustmentRepository;
         this.payrollItemRepository = payrollItemRepository;
+        this.advancedPayrollService = advancedPayrollService;
     }
 
     /**
@@ -242,7 +247,7 @@ public class DataSeeder implements ApplicationRunner {
     }
 
     /**
-     * Crea usuarios iniciales (root, admin y trabajador).
+     * Crea usuarios iniciales (root, admin y tres trabajadores).
      */
     private void seedUsers() {
         LocalDateTime now = LocalDateTime.now();
@@ -388,15 +393,16 @@ public class DataSeeder implements ApplicationRunner {
      */
     private void seedLeaveRequests() {
         LocalDateTime now = LocalDateTime.now();
+        YearMonth currentMonth = YearMonth.now();
         List<LeaveRequestDocument> requests = new java.util.ArrayList<>();
         if (workerId != null) {
             requests.add(LeaveRequestDocument.builder()
                     .id(UUID.randomUUID().toString())
                     .userId(workerId)
                     .hospitalId(hospitalId)
-                    .startDate(now.minusDays(5).toLocalDate().toString())
-                    .endDate(now.minusDays(3).toLocalDate().toString())
-                    .reason("Vacaciones de verano")
+                    .startDate(currentMonth.atDay(Math.min(13, currentMonth.lengthOfMonth())).toString())
+                    .endDate(currentMonth.atDay(Math.min(14, currentMonth.lengthOfMonth())).toString())
+                    .reason("Vacaciones familiares planificadas")
                     .leaveType("VACATION")
                     .paid(true)
                     .status(com.joseluu.hospital.dto.LeaveRequestStatus.APPROVED)
@@ -407,9 +413,9 @@ public class DataSeeder implements ApplicationRunner {
                     .id(UUID.randomUUID().toString())
                     .userId(workerId)
                     .hospitalId(hospitalId)
-                    .startDate(now.plusDays(10).toLocalDate().toString())
-                    .endDate(now.plusDays(12).toLocalDate().toString())
-                    .reason("Asuntos propios")
+                    .startDate(currentMonth.atDay(Math.min(20, currentMonth.lengthOfMonth())).toString())
+                    .endDate(currentMonth.atDay(Math.min(20, currentMonth.lengthOfMonth())).toString())
+                    .reason("Asuntos propios solicitados")
                     .leaveType("PERSONAL")
                     .paid(false)
                     .status(com.joseluu.hospital.dto.LeaveRequestStatus.APPROVED)
@@ -422,9 +428,9 @@ public class DataSeeder implements ApplicationRunner {
                     .id(UUID.randomUUID().toString())
                     .userId(worker2Id)
                     .hospitalId(hospitalId)
-                    .startDate(now.minusDays(3).toLocalDate().toString())
-                    .endDate(now.minusDays(2).toLocalDate().toString())
-                    .reason("Vacaciones de invierno")
+                    .startDate(currentMonth.atDay(Math.min(20, currentMonth.lengthOfMonth())).toString())
+                    .endDate(currentMonth.atDay(Math.min(21, currentMonth.lengthOfMonth())).toString())
+                    .reason("Vacaciones ya aprobadas")
                     .leaveType("VACATION")
                     .paid(true)
                     .status(com.joseluu.hospital.dto.LeaveRequestStatus.APPROVED)
@@ -437,9 +443,22 @@ public class DataSeeder implements ApplicationRunner {
                     .id(UUID.randomUUID().toString())
                     .userId(worker3Id)
                     .hospitalId(hospitalId)
-                    .startDate(now.plusDays(5).toLocalDate().toString())
-                    .endDate(now.plusDays(7).toLocalDate().toString())
-                    .reason("Vacaciones familiares")
+                    .startDate(currentMonth.atDay(Math.min(21, currentMonth.lengthOfMonth())).toString())
+                    .endDate(currentMonth.atDay(Math.min(21, currentMonth.lengthOfMonth())).toString())
+                    .reason("Dia personal no remunerado")
+                    .leaveType("PERSONAL")
+                    .paid(false)
+                    .status(com.joseluu.hospital.dto.LeaveRequestStatus.APPROVED)
+                    .requestedAt(now.minusDays(3).toString())
+                    .reviewedAt(now.minusDays(2).toString())
+                    .build());
+            requests.add(LeaveRequestDocument.builder()
+                    .id(UUID.randomUUID().toString())
+                    .userId(worker3Id)
+                    .hospitalId(hospitalId)
+                    .startDate(currentMonth.atDay(Math.min(27, currentMonth.lengthOfMonth())).toString())
+                    .endDate(currentMonth.atDay(Math.min(28, currentMonth.lengthOfMonth())).toString())
+                    .reason("Vacaciones pendientes de aprobacion")
                     .leaveType("VACATION")
                     .paid(true)
                     .status(com.joseluu.hospital.dto.LeaveRequestStatus.PENDING)
@@ -510,117 +529,19 @@ public class DataSeeder implements ApplicationRunner {
     }
 
     /**
-     * Genera nominas detalladas para los 3 trabajadores con explicacion de conceptos.
-     * Incluye: vacaciones, horas extra, plus nocturnidad, festivos, deducciones.
+     * Genera nominas reales a partir de contratos, ausencias, ajustes y turnos del seed.
      */
     private void seedPayrolls() {
-        LocalDateTime now = LocalDateTime.now();
         String currentPeriod = java.time.YearMonth.now().toString();
-        List<PayrollDocument> payrolls = new java.util.ArrayList<>();
-        List<PayrollItemDocument> allItems = new java.util.ArrayList<>();
-
         if (workerId != null) {
-            String payroll1Id = UUID.randomUUID().toString();
-            payrolls.add(PayrollDocument.builder()
-                    .id(payroll1Id)
-                    .workerId(workerId)
-                    .workerFullName("Juan Perez")
-                    .hospitalId(hospitalId)
-                    .period(currentPeriod)
-                    .grossSalary(2450.0)
-                    .overtimeAmount(180.0)
-                    .bonusAmount(230.0)
-                    .otherDeductions(120.0)
-                    .incomeTaxWithholding(294.0)
-                    .socialSecurityWorker(155.0)
-                    .netSalary(1881.0)
-                    .status(PayrollStatus.ISSUED)
-                    .issuedAt(now.toString())
-                    .build());
-            allItems.addAll(java.util.Arrays.asList(
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll1Id).workerId(workerId).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.BASE_HOURS).description("Horas base trabajadas (140h)").quantity(140).unitAmount(13.75).totalAmount(1925.0).build(),
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll1Id).workerId(workerId).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.NIGHT_BONUS).description("Plus nocturnidad (20h x 25%)").quantity(20).unitAmount(3.4375).totalAmount(68.75).build(),
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll1Id).workerId(workerId).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.HOLIDAY_BONUS).description("Plus festivo/fin de semana (8h x 15%)").quantity(8).unitAmount(2.0625).totalAmount(16.5).build(),
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll1Id).workerId(workerId).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.OVERTIME).description("Horas extra (10h x 1.5)").quantity(10).unitAmount(20.625).totalAmount(206.25).build(),
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll1Id).workerId(workerId).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.MANUAL_BONUS).description("Bono productividad turnos nocturnos").quantity(1).unitAmount(150.0).totalAmount(150.0).build(),
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll1Id).workerId(workerId).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.MANUAL_BONUS).description("Plus festivo trabajado").quantity(1).unitAmount(80.0).totalAmount(80.0).build(),
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll1Id).workerId(workerId).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.UNPAID_ABSENCE).description("Dias no remunerados (asuntos propios 3 dias)").quantity(3).unitAmount(110.0).totalAmount(-330.0).build()
-            ));
+            advancedPayrollService.generate(hospitalId, workerId, currentPeriod, adminId);
         }
-
         if (worker2Id != null) {
-            String payroll2Id = UUID.randomUUID().toString();
-            payrolls.add(PayrollDocument.builder()
-                    .id(payroll2Id)
-                    .workerId(worker2Id)
-                    .workerFullName("Ana Lopez")
-                    .hospitalId(hospitalId)
-                    .period(currentPeriod)
-                    .grossSalary(2280.0)
-                    .overtimeAmount(100.0)
-                    .bonusAmount(120.0)
-                    .otherDeductions(80.0)
-                    .incomeTaxWithholding(273.6)
-                    .socialSecurityWorker(144.0)
-                    .netSalary(1882.4)
-                    .status(PayrollStatus.DRAFT)
-                    .issuedAt(now.toString())
-                    .build());
-            allItems.addAll(java.util.Arrays.asList(
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll2Id).workerId(worker2Id).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.BASE_HOURS).description("Horas base trabajadas (140h)").quantity(140).unitAmount(12.50).totalAmount(1750.0).build(),
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll2Id).workerId(worker2Id).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.NIGHT_BONUS).description("Plus nocturnidad (16h x 25%)").quantity(16).unitAmount(3.125).totalAmount(50.0).build(),
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll2Id).workerId(worker2Id).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.HOLIDAY_BONUS).description("Plus festivo/fin de semana (12h x 15%)").quantity(12).unitAmount(1.875).totalAmount(22.5).build(),
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll2Id).workerId(worker2Id).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.OVERTIME).description("Horas extra (8h x 1.5)").quantity(8).unitAmount(18.75).totalAmount(150.0).build(),
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll2Id).workerId(worker2Id).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.MANUAL_BONUS).description("Bono nocturnidad acumulada").quantity(1).unitAmount(120.0).totalAmount(120.0).build(),
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll2Id).workerId(worker2Id).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.UNPAID_ABSENCE).description("Vacaciones pagadas (2 dias, sin deduccion)").quantity(2).unitAmount(0.0).totalAmount(0.0).build()
-            ));
+            advancedPayrollService.generate(hospitalId, worker2Id, currentPeriod, adminId);
         }
-
         if (worker3Id != null) {
-            String payroll3Id = UUID.randomUUID().toString();
-            payrolls.add(PayrollDocument.builder()
-                    .id(payroll3Id)
-                    .workerId(worker3Id)
-                    .workerFullName("Pedro Martinez")
-                    .hospitalId(hospitalId)
-                    .period(currentPeriod)
-                    .grossSalary(1950.0)
-                    .overtimeAmount(50.0)
-                    .bonusAmount(0.0)
-                    .otherDeductions(50.0)
-                    .incomeTaxWithholding(234.0)
-                    .socialSecurityWorker(123.0)
-                    .netSalary(1543.0)
-                    .status(PayrollStatus.DRAFT)
-                    .issuedAt(now.toString())
-                    .build());
-            allItems.addAll(java.util.Arrays.asList(
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll3Id).workerId(worker3Id).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.BASE_HOURS).description("Horas base trabajadas (140h)").quantity(140).unitAmount(11.25).totalAmount(1575.0).build(),
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll3Id).workerId(worker3Id).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.HOLIDAY_BONUS).description("Plus festivo/fin de semana (10h x 15%)").quantity(10).unitAmount(1.6875).totalAmount(16.875).build(),
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll3Id).workerId(worker3Id).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.OVERTIME).description("Horas extra (4h x 1.5)").quantity(4).unitAmount(16.875).totalAmount(67.5).build(),
-                    PayrollItemDocument.builder().id(UUID.randomUUID().toString()).payrollId(payroll3Id).workerId(worker3Id).hospitalId(hospitalId)
-                            .type(com.joseluu.hospital.entity.enums.PayrollItemType.MANUAL_PENALTY).description("Penalizacion por retraso recurrente").quantity(1).unitAmount(50.0).totalAmount(-50.0).build()
-            ));
+            advancedPayrollService.generate(hospitalId, worker3Id, currentPeriod, adminId);
         }
-
-        payrollRepository.saveAll(payrolls);
-        payrollItemRepository.saveAll(allItems);
     }
 
     /**
@@ -822,14 +743,13 @@ public class DataSeeder implements ApplicationRunner {
      * Crea demandas de turno para el sistema de autoasignacion.
      */
     private void seedShiftRequirements() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDate baseDate = LocalDate.now().plusDays(1);
         List<ShiftRequirementDocument> requirements = new java.util.ArrayList<>();
-        String baseDate = now.toLocalDate().toString();
         requirements.add(ShiftRequirementDocument.builder()
                 .id(UUID.randomUUID().toString())
                 .hospitalId(hospitalId)
                 .department("Urgencias")
-                .date(baseDate)
+                .date(baseDate.toString())
                 .shiftTypeCode("MORNING")
                 .requiredWorkers(2)
                 .build());
@@ -837,7 +757,7 @@ public class DataSeeder implements ApplicationRunner {
                 .id(UUID.randomUUID().toString())
                 .hospitalId(hospitalId)
                 .department("Urgencias")
-                .date(baseDate)
+                .date(baseDate.toString())
                 .shiftTypeCode("AFTERNOON")
                 .requiredWorkers(1)
                 .build());
@@ -845,7 +765,7 @@ public class DataSeeder implements ApplicationRunner {
                 .id(UUID.randomUUID().toString())
                 .hospitalId(hospitalId)
                 .department("Urgencias")
-                .date(baseDate)
+                .date(baseDate.plusDays(1).toString())
                 .shiftTypeCode("NIGHT")
                 .requiredWorkers(1)
                 .build());
@@ -853,7 +773,7 @@ public class DataSeeder implements ApplicationRunner {
                 .id(UUID.randomUUID().toString())
                 .hospitalId(hospitalId)
                 .department("Urgencias")
-                .date(now.plusDays(1).toLocalDate().toString())
+                .date(baseDate.plusDays(1).toString())
                 .shiftTypeCode("MORNING")
                 .requiredWorkers(1)
                 .build());
@@ -861,15 +781,7 @@ public class DataSeeder implements ApplicationRunner {
                 .id(UUID.randomUUID().toString())
                 .hospitalId(hospitalId)
                 .department("Urgencias")
-                .date(now.plusDays(1).toLocalDate().toString())
-                .shiftTypeCode("NIGHT")
-                .requiredWorkers(1)
-                .build());
-        requirements.add(ShiftRequirementDocument.builder()
-                .id(UUID.randomUUID().toString())
-                .hospitalId(hospitalId)
-                .department("Urgencias")
-                .date(now.plusDays(2).toLocalDate().toString())
+                .date(baseDate.plusDays(2).toString())
                 .shiftTypeCode("AFTERNOON")
                 .requiredWorkers(2)
                 .build());
@@ -880,38 +792,60 @@ public class DataSeeder implements ApplicationRunner {
      * Crea asignaciones de turno manuales para testear nominas.
      */
     private void seedShiftAssignments() {
-        LocalDateTime now = LocalDateTime.now();
+        YearMonth currentMonth = YearMonth.now();
         List<ShiftAssignmentDocument> assignments = new java.util.ArrayList<>();
         if (workerId != null) {
-            assignments.add(buildAssignment(workerId, "Juan Perez", "Urgencias", "MORNING",
-                    now.withHour(7).withMinute(0), now.withHour(15).withMinute(0), false));
-            assignments.add(buildAssignment(workerId, "Juan Perez", "Urgencias", "NIGHT",
-                    now.minusDays(1).withHour(23).withMinute(0), now.withHour(7).withMinute(0), true));
-            assignments.add(buildAssignment(workerId, "Juan Perez", "Urgencias", "MORNING",
-                    now.plusDays(1).withHour(7).withMinute(0), now.plusDays(1).withHour(15).withMinute(0), false));
+            addPatternAssignments(assignments, workerId, "Juan Perez", "Urgencias", currentMonth,
+                    "8:MORNING", "9:MORNING", "10:AFTERNOON", "11:NIGHT", "12:MORNING",
+                    "15:MORNING", "16:NIGHT", "17:MORNING", "18:AFTERNOON", "19:MORNING",
+                    "22:NIGHT", "23:MORNING", "24:MORNING", "25:NIGHT", "26:MORNING",
+                    "27:AFTERNOON", "28:MORNING", "29:NIGHT");
         }
         if (worker2Id != null) {
-            assignments.add(buildAssignment(worker2Id, "Ana Lopez", "Urgencias", "AFTERNOON",
-                    now.withHour(15).withMinute(0), now.withHour(23).withMinute(0), false));
-            assignments.add(buildAssignment(worker2Id, "Ana Lopez", "Urgencias", "MORNING",
-                    now.minusDays(2).withHour(7).withMinute(0), now.minusDays(2).withHour(15).withMinute(0), false));
-            assignments.add(buildAssignment(worker2Id, "Ana Lopez", "Urgencias", "NIGHT",
-                    now.plusDays(1).withHour(23).withMinute(0), now.plusDays(2).withHour(7).withMinute(0), true));
+            addPatternAssignments(assignments, worker2Id, "Ana Lopez", "Urgencias", currentMonth,
+                    "8:AFTERNOON", "9:NIGHT", "10:MORNING", "11:AFTERNOON", "12:MORNING",
+                    "15:NIGHT", "16:MORNING", "17:AFTERNOON", "18:MORNING", "19:NIGHT",
+                    "22:MORNING", "23:AFTERNOON", "24:MORNING", "25:NIGHT", "26:MORNING",
+                    "27:AFTERNOON", "28:MORNING", "29:AFTERNOON");
         }
         if (worker3Id != null) {
-            assignments.add(buildAssignment(worker3Id, "Pedro Martinez", "Urgencias", "MORNING",
-                    now.withHour(7).withMinute(0), now.withHour(15).withMinute(0), false));
-            assignments.add(buildAssignment(worker3Id, "Pedro Martinez", "Urgencias", "AFTERNOON",
-                    now.plusDays(2).withHour(15).withMinute(0), now.plusDays(2).withHour(23).withMinute(0), false));
+            addPatternAssignments(assignments, worker3Id, "Pedro Martinez", "Urgencias", currentMonth,
+                    "8:MORNING", "9:AFTERNOON", "10:MORNING", "11:AFTERNOON", "12:MORNING",
+                    "15:AFTERNOON", "16:MORNING", "17:AFTERNOON", "18:MORNING", "19:AFTERNOON",
+                    "22:MORNING", "23:AFTERNOON", "24:MORNING", "25:AFTERNOON", "26:MORNING",
+                    "27:MORNING", "28:AFTERNOON", "29:MORNING");
         }
         shiftAssignmentRepository.saveAll(assignments);
+    }
+
+    /**
+     * Añade un patrón de turnos al mes actual para un trabajador.
+     */
+    private void addPatternAssignments(List<ShiftAssignmentDocument> assignments,
+                                       String workerRef,
+                                       String fullName,
+                                       String dept,
+                                       YearMonth month,
+                                       String... pattern) {
+        for (String entry : pattern) {
+            String[] parts = entry.split(":");
+            int day = Integer.parseInt(parts[0]);
+            if (day > month.lengthOfMonth()) {
+                continue;
+            }
+
+            LocalDate date = month.atDay(day);
+            assignments.add(buildAssignment(workerRef, fullName, dept, parts[1], date));
+        }
     }
 
     /**
      * Construye una asignacion de turno.
      */
     private ShiftAssignmentDocument buildAssignment(String workerId, String fullName, String dept,
-                                                    String shiftType, LocalDateTime start, LocalDateTime end, boolean crossesMidnight) {
+                                                    String shiftType, LocalDate date) {
+        LocalDateTime start = buildShiftStart(date, shiftType);
+        LocalDateTime end = buildShiftEnd(date, shiftType);
         return ShiftAssignmentDocument.builder()
                 .id(UUID.randomUUID().toString())
                 .hospitalId(hospitalId)
@@ -921,12 +855,36 @@ public class DataSeeder implements ApplicationRunner {
                 .shiftTypeCode(shiftType)
                 .startAt(start.toString())
                 .endAt(end.toString())
-                .status(ShiftAssignmentStatus.WORKED)
+                .status(date.isAfter(LocalDate.now()) ? ShiftAssignmentStatus.ASSIGNED : ShiftAssignmentStatus.WORKED)
                 .source(ShiftAssignmentSource.MANUAL)
                 .version(1)
                 .createdAt(start.toString())
                 .updatedAt(start.toString())
                 .build();
+    }
+
+    /**
+     * Calcula el inicio de un turno semilla.
+     */
+    private LocalDateTime buildShiftStart(LocalDate date, String shiftType) {
+        return switch (shiftType) {
+            case "AFTERNOON" -> date.atTime(15, 0);
+            case "NIGHT" -> date.atTime(23, 0);
+            case "MIXED" -> date.atTime(10, 0);
+            default -> date.atTime(7, 0);
+        };
+    }
+
+    /**
+     * Calcula el fin de un turno semilla.
+     */
+    private LocalDateTime buildShiftEnd(LocalDate date, String shiftType) {
+        return switch (shiftType) {
+            case "AFTERNOON" -> date.atTime(23, 0);
+            case "NIGHT" -> date.plusDays(1).atTime(7, 0);
+            case "MIXED" -> date.atTime(18, 0);
+            default -> date.atTime(15, 0);
+        };
     }
 
     /**
