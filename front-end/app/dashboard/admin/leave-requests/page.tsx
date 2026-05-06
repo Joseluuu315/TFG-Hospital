@@ -239,7 +239,7 @@ export default function AdminLeaveRequestsPage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="pending">
-            <TabsList>
+            <TabsList className="h-auto w-full justify-start overflow-x-auto">
               <TabsTrigger value="pending" className="gap-2">
                 Pendientes
                 {pendingRequests.length > 0 && (
@@ -306,7 +306,7 @@ export default function AdminLeaveRequestsPage() {
               rows={3}
             />
           </Field>
-          <DialogFooter className="gap-2">
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
             <Button variant="outline" onClick={() => setIsReviewDialogOpen(false)}>
               Cancelar
             </Button>

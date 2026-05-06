@@ -275,7 +275,7 @@ export default function AdminOperationsPage() {
       description="Configura reglas, define tipos de turno y ejecuta la asignacion de turnos"
     >
       {/* Metricas resumen */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Trabajadores activos</CardTitle>
@@ -315,7 +315,7 @@ export default function AdminOperationsPage() {
           <CardDescription>Estas reglas alimentan tanto el planificador de turnos como la nomina avanzada.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <div className="space-y-2">
               <Label>Horas maximas semanales</Label>
               <Input type="number" value={settings.maxWeeklyHours} onChange={(e) => updateSettings('maxWeeklyHours', Number(e.target.value))} />
@@ -370,7 +370,7 @@ export default function AdminOperationsPage() {
             <CardDescription>Define manana, tarde, noche o cualquier patron especial.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <form onSubmit={handleCreateShiftType} className="grid gap-4 md:grid-cols-2">
+            <form onSubmit={handleCreateShiftType} className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Codigo</Label>
                 <Input
@@ -407,8 +407,8 @@ export default function AdminOperationsPage() {
               </Button>
             </form>
 
-            <div className="rounded-lg border">
-              <Table>
+            <div className="overflow-x-auto rounded-lg border">
+              <Table className="min-w-[640px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Codigo</TableHead>
@@ -471,7 +471,7 @@ export default function AdminOperationsPage() {
               </div>
             )}
 
-            <form onSubmit={handleCreateRequirement} className="grid gap-4 md:grid-cols-2">
+            <form onSubmit={handleCreateRequirement} className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Fecha</Label>
                 <Input
@@ -532,7 +532,7 @@ export default function AdminOperationsPage() {
             {/* Rango de asignacion */}
             <div className="space-y-3 rounded-lg border p-4">
               <p className="font-medium text-sm">Asignacion por rango de fechas</p>
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Desde</Label>
                   <Input
@@ -557,7 +557,7 @@ export default function AdminOperationsPage() {
 
             {/* Tabla de asignaciones del rango */}
             <div className="rounded-lg border">
-              <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
+              <div className="flex flex-col gap-2 border-b bg-muted/30 px-4 py-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm font-medium text-muted-foreground">
                   Demandas registradas ({existingRequirements.length})
                 </p>
@@ -565,7 +565,8 @@ export default function AdminOperationsPage() {
                   {isLoadingAssignments ? 'Cargando...' : 'Actualizar'}
                 </Button>
               </div>
-              <Table>
+              <div className="overflow-x-auto">
+                <Table className="min-w-[640px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Fecha</TableHead>
@@ -604,17 +605,19 @@ export default function AdminOperationsPage() {
                     ))
                   )}
                 </TableBody>
-              </Table>
+                </Table>
+              </div>
             </div>
 
             {/* Tabla de asignaciones del rango */}
             <div className="rounded-lg border">
-              <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
+              <div className="flex flex-col gap-2 border-b bg-muted/30 px-4 py-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm font-medium text-muted-foreground">
                   Asignaciones en el rango ({existingAssignments.length})
                 </p>
               </div>
-              <Table>
+              <div className="overflow-x-auto">
+                <Table className="min-w-[640px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Trabajador</TableHead>
@@ -657,7 +660,8 @@ export default function AdminOperationsPage() {
                     ))
                   )}
                 </TableBody>
-              </Table>
+                </Table>
+              </div>
             </div>
           </CardContent>
         </Card>

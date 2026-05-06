@@ -1,526 +1,387 @@
-# Documento Tecnico Completo - TFG-Hospital
+# Documento tecnico del proyecto TFG-Hospital
 
-## 1. Resumen Ejecutivo
+## 1. Resumen del proyecto
 
-`TFG-Hospital` es una aplicacion full stack para gestion hospitalaria compuesta por:
+`TFG-Hospital` es una aplicacion web full stack para la gestion de hospitales con enfoque operativo. No se limita a usuarios o fichas administrativas: incluye tambien reglas de turnicidad, demandas por departamento, autoasignacion, control de ausencias, calculo de nomina y trazabilidad.
 
-- Backend `Spring Boot 4.0.2` con `Java 17`
-- Frontend `Next.js 16` con `React 19`
-- Base de datos `MongoDB`
+La solucion esta separada en dos aplicaciones:
 
-El sistema implementa tres perfiles:
+- backend REST con Spring Boot y MongoDB
+- frontend web con Next.js, React y TypeScript
 
-- `ROOT`: administracion central
-- `HOSPITAL_ADMIN`: administracion de un hospital
-- `WORKER`: trabajador del hospital
+El sistema trabaja con tres roles:
 
-Funciones principales:
+- `ROOT`
+- `HOSPITAL_ADMIN`
+- `WORKER`
 
-- autenticacion y sesion
-- gestion de hospitales
-- gestion de trabajadores
-- anuncios internos
-- solicitudes de ausencia
-- nominas
-- chat interno
-- grupos de trabajo
+## 2. Objetivo funcional
+
+El objetivo del proyecto es centralizar en una sola plataforma varios procesos internos del hospital:
+
+- administracion de hospitales
+- gestion de personal
+- calendario y ausencias
+- operaciones de turnos
+- nomina avanzada
+- comunicacion interna
 - notificaciones
-- estadisticas globales
+- auditoria
 
-## 2. Estado Actual Verificado
+## 3. Arquitectura general
 
-Verificaciones realizadas sobre este repositorio:
-
-- `gradlew test`: correcto
-- `npm run lint`: correcto
-- `npm run build`: correcto
-- MongoDB en `localhost:27017`: accesible
-
-## 3. Arquitectura del Proyecto
-
-### 3.1 Backend
+## 3.1 Backend
 
 Ruta principal:
 
 - `src/main/java/com/joseluu/hospital`
 
-Capas:
+Estructura:
 
-- `controller`: expone endpoints REST
-- `service`: logica de negocio
+- `controller`: endpoints HTTP
+- `service`: reglas de negocio y procesos
 - `repository`: acceso a MongoDB
 - `entity`: documentos persistidos
-- `dto`: contratos de entrada/salida
+- `dto`: contratos de entrada y salida
+- `exception` y `error`: manejo de errores
 
-Tecnologias:
+Controladores principales:
 
-- `spring-boot-starter-webmvc`
-- `spring-boot-starter-data-mongodb`
-- `lombok`
+- `AuthController`
+- `HospitalsController`
+- `UsersController`
+- `LeaveRequestsController`
+- `PayrollsController`
+- `AdvancedPayrollController`
+- `HospitalSettingsController`
+- `ShiftTypesController`
+- `SchedulingController`
+- `WorkerContractsController`
+- `ChatController`
+- `WorkGroupsController`
+- `NotificationsController`
+- `AuditLogsController`
+- `AdminStatsController`
 
-### 3.2 Frontend
+Servicios clave:
+
+- `AuthService`
+- `HospitalService`
+- `UserService`
+- `SchedulingService`
+- `AdvancedPayrollService`
+- `PayrollService`
+- `NotificationService`
+- `AuditLogService`
+- `ChatService`
+- `WorkGroupService`
+- `DataSeeder`
+
+## 3.2 Frontend
 
 Ruta principal:
 
 - `front-end`
 
-Tecnologias:
-
-- `Next.js 16.1.6`
-- `React 19.2.4`
-- `TypeScript`
-- `Axios`
-- `Tailwind CSS 4`
-- `Radix UI`
-- `Sonner`
-
 Estructura relevante:
 
-- `app/`: paginas y rutas
-- `components/`: UI y componentes de negocio
-- `contexts/auth-context.tsx`: estado de autenticacion
-- `lib/api.ts`: cliente HTTP y tipos
+- `app/`: rutas del frontend
+- `components/`: componentes reutilizables y UI
+- `contexts/`: estado compartido
+- `lib/`: cliente API, tipos, utilidades
 
-### 3.3 Base de Datos
+Paneles:
 
-Motor:
+- `dashboard/root`
+- `dashboard/admin`
+- `dashboard/worker`
+- `dashboard/settings`
 
-- `MongoDB`
+## 3.3 Flujo de integracion
 
-Configuracion actual:
+El frontend consume el backend a traves de `/api/*`. Next aplica un rewrite hacia el backend, por lo que desde la UI se trabaja de forma transparente con la API REST.
 
-- URI: `mongodb://localhost:27017/hospital`
-- Base de datos: `hospital`
+## 4. Tecnologias utilizadas
 
-Archivo:
+### Backend
 
-- `src/main/resources/application.properties`
+- Java 17
+- Spring Boot 4.0.2
+- Spring Web MVC
+- Spring Data MongoDB
+- Spring Validation
+- Spring Security Crypto
+- Actuator
+- Lombok
+- Gradle
 
-## 4. Arranque del Sistema
+### Frontend
 
-### 4.1 Backend
+- Next.js 16.1.6
+- React 19.2.4
+- TypeScript 5.7.3
+- Tailwind CSS 4
+- Radix UI
+- Axios
+- SWR
+- React Hook Form
+- Zod
+- Sonner
+- Lucide React
 
-Desde la raiz:
+### Base de datos
 
-```powershell
-.\gradlew bootRun
-```
+- MongoDB
 
-Expone la API en:
+## 5. Roles y permisos
 
-- `http://localhost:8080`
-
-### 4.2 Frontend
-
-Desde `front-end`:
-
-```powershell
-npm install
-npm run dev
-```
-
-Expone la interfaz en:
-
-- `http://localhost:3000`
-
-### 4.3 Integracion front-back
-
-El frontend usa rewrite de Next:
-
-- `/api/*` -> `http://localhost:8080/api/*`
-
-Archivo:
-
-- `front-end/next.config.mjs`
-
-## 5. Autenticacion
-
-### 5.1 Como funciona
-
-La autenticacion actual no usa JWT real. Usa tokens aleatorios en memoria:
-
-- `accessToken`
-- `refreshToken`
-
-Importante:
-
-- las sesiones se pierden al reiniciar el backend
-- las contrasenas se comparan en texto plano
-- no existe Spring Security con filtros reales
-
-Servicio:
-
-- `AuthService`
-
-### 5.2 Endpoints de autenticacion
-
-Base:
-
-- `/api/auth`
-
-Endpoints:
-
-1. `POST /login`
-   - Body:
-   ```json
-   {
-     "email": "admin@hospital-reina-sofia.com",
-     "password": "admin123"
-   }
-   ```
-   - Respuesta:
-   ```json
-   {
-     "accessToken": "string",
-     "refreshToken": "string",
-     "user": {}
-   }
-   ```
-
-2. `POST /refresh`
-   - Body:
-   ```json
-   {
-     "refreshToken": "string"
-   }
-   ```
-
-3. `POST /logout`
-   - Header: `Authorization: Bearer <token>`
-
-4. `GET /me`
-   - Header: `Authorization: Bearer <token>`
-
-## 6. Roles y Permisos Funcionales
-
-### 6.1 ROOT
+## 5.1 ROOT
 
 Puede:
 
-- ver estadisticas globales
-- listar, crear, editar, suspender y eliminar hospitales
-- usar chat de soporte
+- consultar metricas globales
+- gestionar hospitales
+- acceder al chat de soporte
 
-### 6.2 HOSPITAL_ADMIN
+## 5.2 HOSPITAL_ADMIN
 
 Puede:
 
 - gestionar trabajadores
-- gestionar anuncios del hospital
-- revisar solicitudes de ausencia
-- emitir nominas
-- crear chats privados
-- crear grupos de trabajo
+- gestionar contratos
+- configurar reglas del hospital
+- crear tipos de turno
+- registrar demandas
+- ejecutar autoasignacion
+- revisar ausencias
+- generar nominas
+- gestionar chats y grupos
+- consultar auditoria
 
-### 6.3 WORKER
+## 5.3 WORKER
 
 Puede:
 
 - ver su calendario
-- ver y crear sus solicitudes de ausencia
+- solicitar ausencias
 - ver sus nominas
+- descargar PDF
 - participar en chats
 - editar su perfil
 
-## 7. Endpoints REST Completos
+## 6. Modulos funcionales
 
-## 7.1 Admin global
+## 6.1 Autenticacion y sesion
 
-Base:
+La autenticacion actual no usa JWT persistido. El backend valida credenciales contra MongoDB y genera:
 
-- `/api/admin`
+- `accessToken`
+- `refreshToken`
 
-Endpoints:
+Ambos se mantienen en memoria del backend. Esto implica:
 
-- `GET /stats`
-  - devuelve `GlobalStatsDto`
+- las sesiones se pierden al reiniciar el servidor
+- no hay una capa completa de Spring Security con filtros y autorizacion fuerte
 
-## 7.2 Hospitales
+En el frontend, `auth-context.tsx` y `lib/api.ts`:
 
-Base:
+- guardan el token
+- reenvian `Authorization: Bearer ...`
+- intentan refresh automatico ante `401`
 
-- `/api/hospitals`
+## 6.2 Gestion de hospitales
 
-Endpoints:
+Este modulo cubre:
 
-1. `GET /`
-   - lista hospitales
+- listado
+- detalle
+- creacion
+- actualizacion
+- cambio de estado
+- eliminacion
+- anuncios internos
 
-2. `GET /{id}`
-   - detalle de hospital
+La eliminacion del hospital arrastra limpieza de informacion asociada segun la logica del servicio.
 
-3. `POST /`
-   - crea hospital
-   - body:
-   ```json
-   {
-     "name": "Hospital Norte",
-     "address": "Calle X",
-     "city": "Cordoba",
-     "province": "Cordoba",
-     "taxId": "B12345678",
-     "adminEmail": "admin@hospitalnorte.com"
-   }
-   ```
-   - comportamiento actual:
-     - crea hospital en estado `PENDING_REVIEW`
-     - crea usuario `HOSPITAL_ADMIN` si el email no existe
-     - password temporal por defecto: `admin123`
+## 6.3 Gestion de trabajadores
 
-4. `PUT /{id}`
-   - actualiza datos del hospital
+Permite:
 
-5. `PATCH /{id}/status`
-   - body:
-   ```json
-   {
-     "status": "ACTIVE"
-   }
-   ```
+- crear trabajadores
+- editar datos operativos
+- activar o desactivar cuentas
+- consultar calendario
+- asociar contrato laboral
 
-6. `DELETE /{id}`
-   - elimina el hospital
-   - ademas elimina usuarios, nominas, solicitudes, grupos y chats asociados
+Campos habituales:
 
-### 7.2.1 Anuncios de hospital
+- nombre y apellidos
+- email
+- DNI
+- telefono
+- departamento
+- puesto
+- salario base
+- hospital asociado
 
-1. `POST /{id}/announcements`
-   - requiere `Authorization`
+## 6.4 Calendario y ausencias
 
-2. `PUT /{id}/announcements/{announcementId}`
+Cada trabajador puede tener eventos de calendario y solicitudes de ausencia.
 
-3. `DELETE /{id}/announcements/{announcementId}`
+Las ausencias soportan:
 
-DTO de anuncio:
+- fecha inicio y fin
+- motivo
+- tipo de ausencia
+- estado
+- comentario de revision
+- indicador de ausencia pagada o no pagada
 
-```json
-{
-  "id": "string",
-  "title": "string",
-  "content": "string",
-  "priority": "LOW | MEDIUM | HIGH",
-  "authorId": "string",
-  "publishedAt": "string",
-  "expiresAt": "string",
-  "active": true
-}
-```
-
-## 7.3 Usuarios
-
-Base:
-
-- `/api/users`
-
-Endpoints:
-
-1. `GET /`
-   - lista todos los usuarios
-
-2. `GET /{id}`
-   - obtiene un usuario concreto
-
-3. `POST /`
-   - crea trabajador
-
-4. `PUT /{id}`
-   - actualiza usuario concreto
-   - soporta:
-     - `firstName`
-     - `lastName`
-     - `email`
-     - `phone`
-     - `dni`
-     - `imageURL`
-     - `department`
-     - `jobTitle`
-     - `baseSalary`
-     - `enabled`
-     - `accountNonLocked`
-     - `password`
-
-### 7.3.1 Autoservicio
-
-1. `GET /me/calendar?month=YYYY-MM`
-   - calendario del usuario autenticado
-
-2. `GET /me/leave-requests`
-   - solicitudes del usuario autenticado
-
-3. `POST /me/leave-requests`
-   - body:
-   ```json
-   {
-     "startDate": "2026-04-15",
-     "endDate": "2026-04-20",
-     "reason": "Vacaciones"
-   }
-   ```
-
-4. `PUT /me`
-   - actualiza perfil propio
-
-## 7.4 Solicitudes de ausencia
-
-Base:
-
-- `/api/leave-requests`
-
-Endpoints:
-
-1. `GET /?status=PENDING`
-   - lista por estado
-   - si no se indica, usa `PENDING`
-
-2. `PATCH /{userId}/{requestId}`
-   - body:
-   ```json
-   {
-     "status": "APPROVED",
-     "reviewComment": "Aprobado"
-   }
-   ```
-
-Estados:
+Estados principales:
 
 - `PENDING`
 - `APPROVED`
 - `REJECTED`
 
-## 7.5 Nominas
+## 6.5 Operaciones y planificacion de turnos
 
-Base:
+Es uno de los modulos mas potentes del proyecto. Incluye:
 
-- `/api/payrolls`
+- configuracion hospitalaria
+- tipos de turno
+- demandas por fecha y departamento
+- asignacion manual
+- autoasignacion
 
-Endpoints:
+### Reglas de configuracion hospitalaria
 
-1. `GET /`
-   - lista nominas
-   - admite `workerId`
-   - `workerId=me` usa el usuario autenticado
+La configuracion por hospital incluye, entre otros:
 
-2. `GET /{id}`
+- horas maximas semanales
+- descanso minimo entre turnos
+- dias consecutivos maximos
+- noches consecutivas maximas
+- peso de fairness
+- plus nocturno
+- plus festivo
+- multiplicador de horas extra
+- recalcule automatico
 
-3. `POST /`
-   - crea nomina
+### Tipos de turno
 
-4. `PATCH /{id}/status`
-   - body:
-   ```json
-   {
-     "status": "ISSUED"
-   }
-   ```
+Cada tipo define:
 
-5. `GET /{id}/pdf`
-   - devuelve bytes con `application/pdf`
-   - actualmente genera contenido simple, no PDF avanzado real
+- codigo
+- nombre
+- hora de inicio
+- hora de fin
+- cruce de medianoche
 
-Estados:
+Ejemplos sembrados:
 
-- `DRAFT`
-- `ISSUED`
-- `ACKNOWLEDGED`
+- `MORNING`
+- `AFTERNOON`
+- `NIGHT`
+- `MIXED`
 
-## 7.6 Chats
+### Demandas de turno
 
-Base:
+Una demanda representa la necesidad de cobertura para:
 
-- `/api/chats`
+- una fecha
+- un departamento
+- un tipo de turno
+- un numero de trabajadores requeridos
 
-Endpoints:
+### Autoasignacion
 
-1. `GET /`
-   - chats del usuario autenticado
+`SchedulingService` sigue una estrategia por fases:
 
-2. `GET /{chatId}/messages`
-   - mensajes del chat
+1. obtiene trabajadores del hospital
+2. descarta solapes
+3. intenta respetar descansos minimos
+4. intenta respetar horas semanales
+5. prioriza el mismo departamento
+6. reparte carga con una puntuacion simple basada en horas, fines de semana y noches
 
-3. `POST /{chatId}/messages`
-   - body:
-   ```json
-   {
-     "content": "Hola"
-   }
-   ```
+Si no se cubre una demanda, el sistema notifica al administrador.
 
-4. `POST /private`
-   - body:
-   ```json
-   {
-     "userId": "otro-usuario"
-   }
-   ```
+## 6.6 Contratos laborales
 
-5. `PATCH /{chatId}/read`
-   - marca mensajes como leidos
+Cada trabajador puede tener un contrato activo con:
 
-Tipos de chat:
+- tarifa por hora
+- horas semanales
+- plus de nocturnidad
+- plus festivo
+- multiplicador de horas extra
+- fecha de vigencia
+- estado activo
 
-- `PRIVATE`
-- `GROUP`
-- `HOSPITAL`
-- `SUPPORT`
+El contrato alimenta el calculo de nomina avanzada.
 
-## 7.7 Grupos de trabajo
+## 6.7 Nomina avanzada
 
-Base:
+La nomina se calcula a partir de:
 
-- `/api/work-groups`
+- contrato activo
+- turnos asignados o trabajados en el periodo
+- ausencias aprobadas
+- ajustes manuales
 
-Endpoints:
+Conceptos soportados en el desglose:
 
-1. `GET /`
-   - grupos del hospital del usuario autenticado
+- horas base
+- dias remunerados
+- nocturnidad
+- plus de fin de semana o festivo
+- horas extra
+- ausencias no remuneradas
+- bonus manuales
+- penalizaciones manuales
 
-2. `GET /{id}`
+La generacion deja:
 
-3. `POST /`
-   - crea grupo y chat asociado
-   - body:
-   ```json
-   {
-     "name": "Equipo de Urgencias",
-     "description": "Coordinacion",
-     "members": ["id1", "id2"]
-   }
-   ```
+- un documento en `payrolls`
+- lineas de detalle en `payroll_items`
+- posibilidad de descarga PDF
 
-4. `PUT /{id}`
-   - actualiza grupo y sincroniza participantes del chat
+## 6.8 Chat, grupos y soporte
 
-5. `DELETE /{id}`
+El sistema permite:
 
-6. `POST /{id}/members`
-   - body:
-   ```json
-   {
-     "userId": "id-usuario"
-   }
-   ```
+- chat privado
+- chat de hospital
+- chat de grupo
+- chat de soporte
 
-7. `DELETE /{id}/members/{userId}`
+Los grupos de trabajo mantienen:
 
-## 7.8 Notificaciones
+- lista de miembros
+- nombres de miembros
+- chat vinculado
 
-Base:
+## 6.9 Notificaciones y auditoria
 
-- `/api/notifications`
+Se generan notificaciones funcionales cuando ocurre, por ejemplo:
 
-Endpoints:
+- asignacion de turno
+- nomina generada
+- demanda no cubierta
 
-1. `GET /me`
-   - notificaciones del usuario autenticado
+Tambien se registran acciones sensibles en `audit_logs`, lo que ayuda a trazabilidad y depuracion.
 
-2. `POST /{notificationId}/read`
-   - marca una notificacion como leida
+## 7. Modelo de datos MongoDB
 
-## 8. Modelo de Datos MongoDB
+El proyecto usa MongoDB con colecciones separadas por dominio. No hay claves foraneas estrictas, pero si relaciones logicas por identificadores.
 
-## 8.1 Coleccion `users`
+## 7.1 Coleccion `users`
 
-Campos:
+Responsabilidad:
+
+- identidad del usuario y pertenencia al hospital
+
+Campos habituales:
 
 - `id`
 - `firstName`
@@ -529,7 +390,6 @@ Campos:
 - `email`
 - `password`
 - `phone`
-- `dateOfBirth`
 - `dni`
 - `role`
 - `enabled`
@@ -541,13 +401,16 @@ Campos:
 - `hireDate`
 - `baseSalary`
 - `calendarEvents[]`
-- `leaveRequestIds[]`
 - `createdAt`
 - `updatedAt`
 
-## 8.2 Coleccion `hospitals`
+## 7.2 Coleccion `hospitals`
 
-Campos:
+Responsabilidad:
+
+- datos del centro y anuncios
+
+Campos habituales:
 
 - `id`
 - `name`
@@ -556,28 +419,132 @@ Campos:
 - `province`
 - `taxId`
 - `status`
-- `superAdminId`
 - `announcements[]`
 - `createdAt`
 - `updatedAt`
 
-## 8.3 Coleccion `leave_requests`
+## 7.3 Coleccion `leave_requests`
 
-Campos:
+Responsabilidad:
+
+- ausencias de trabajadores
+
+Campos habituales:
 
 - `id`
 - `userId`
+- `hospitalId`
 - `startDate`
 - `endDate`
 - `reason`
+- `leaveType`
+- `paid`
 - `status`
 - `requestedAt`
 - `reviewedAt`
 - `reviewComment`
 
-## 8.4 Coleccion `payrolls`
+## 7.4 Coleccion `hospital_settings`
 
-Campos:
+Responsabilidad:
+
+- reglas operativas y economicas por hospital
+
+Campos habituales:
+
+- `id`
+- `hospitalId`
+- `maxWeeklyHours`
+- `minRestHours`
+- `maxConsecutiveDays`
+- `maxConsecutiveNights`
+- `fairnessWeight`
+- `autoRecalculate`
+- `nightBonusPct`
+- `holidayBonusPct`
+- `overtimeMultiplier`
+
+## 7.5 Coleccion `shift_types`
+
+Responsabilidad:
+
+- catalogo de turnos configurables
+
+Campos habituales:
+
+- `id`
+- `hospitalId`
+- `code`
+- `name`
+- `startTime`
+- `endTime`
+- `crossesMidnight`
+
+## 7.6 Coleccion `shift_requirements`
+
+Responsabilidad:
+
+- necesidades de cobertura por fecha
+
+Campos habituales:
+
+- `id`
+- `hospitalId`
+- `department`
+- `date`
+- `shiftTypeCode`
+- `requiredWorkers`
+
+## 7.7 Coleccion `shift_assignments`
+
+Responsabilidad:
+
+- turnos asignados a trabajadores
+
+Campos habituales:
+
+- `id`
+- `hospitalId`
+- `workerId`
+- `workerFullName`
+- `department`
+- `shiftTypeCode`
+- `startAt`
+- `endAt`
+- `status`
+- `source`
+- `version`
+- `createdAt`
+- `updatedAt`
+
+## 7.8 Coleccion `worker_contracts`
+
+Responsabilidad:
+
+- contrato activo por trabajador
+
+Campos habituales:
+
+- `id`
+- `hospitalId`
+- `workerId`
+- `hourlyRate`
+- `weeklyHours`
+- `nightBonusPct`
+- `holidayBonusPct`
+- `overtimeMultiplier`
+- `effectiveFrom`
+- `active`
+- `createdAt`
+- `updatedAt`
+
+## 7.9 Coleccion `payrolls`
+
+Responsabilidad:
+
+- resumen de nomina por periodo
+
+Campos habituales:
 
 - `id`
 - `workerId`
@@ -596,9 +563,45 @@ Campos:
 - `acknowledgedAt`
 - `issuedAt`
 
-## 8.5 Coleccion `chats`
+## 7.10 Coleccion `payroll_items`
 
-Campos:
+Responsabilidad:
+
+- lineas de calculo de la nomina
+
+Campos habituales:
+
+- `id`
+- `payrollId`
+- `workerId`
+- `hospitalId`
+- `type`
+- `description`
+- `quantity`
+- `unitAmount`
+- `totalAmount`
+
+## 7.11 Coleccion `payroll_adjustments`
+
+Responsabilidad:
+
+- ajustes manuales positivos o negativos
+
+Campos habituales:
+
+- `id`
+- `hospitalId`
+- `workerId`
+- `period`
+- `type`
+- `description`
+- `amount`
+- `createdBy`
+- `createdAt`
+
+## 7.12 Colecciones de comunicacion
+
+### `chats`
 
 - `id`
 - `type`
@@ -614,9 +617,7 @@ Campos:
 - `createdAt`
 - `updatedAt`
 
-## 8.6 Coleccion `chat_messages`
-
-Campos:
+### `chat_messages`
 
 - `id`
 - `chatId`
@@ -627,9 +628,7 @@ Campos:
 - `timestamp`
 - `read`
 
-## 8.7 Coleccion `work_groups`
-
-Campos:
+### `work_groups`
 
 - `id`
 - `name`
@@ -642,9 +641,9 @@ Campos:
 - `createdAt`
 - `updatedAt`
 
-## 8.8 Coleccion `notifications`
+## 7.13 Colecciones de soporte funcional
 
-Campos:
+### `notifications`
 
 - `id`
 - `userId`
@@ -654,30 +653,59 @@ Campos:
 - `read`
 - `createdAt`
 
-## 9. Datos Semilla
+### `audit_logs`
 
-El backend carga datos automaticamente si las colecciones estan vacias mediante `DataSeeder`.
+- `id`
+- `hospitalId`
+- `actorUserId`
+- `action`
+- `entityType`
+- `entityId`
+- `details`
+- `createdAt`
 
-Se crean:
+## 8. Relaciones logicas del dominio
 
-- 1 hospital
-- 1 usuario `ROOT`
-- 1 usuario `HOSPITAL_ADMIN`
-- 1 usuario `WORKER`
-- 1 solicitud de ausencia
-- 1 nomina
-- chats iniciales
-- 1 grupo de trabajo
+- un hospital tiene muchos usuarios
+- un usuario trabajador puede tener un contrato activo
+- un usuario trabajador puede tener muchas ausencias
+- un usuario trabajador puede tener muchas asignaciones de turno
+- una nomina pertenece a un trabajador y a un hospital
+- una nomina puede tener muchas lineas y muchos ajustes
+- un grupo de trabajo enlaza con un chat
+- una accion del sistema puede producir notificaciones y logs de auditoria
 
-Credenciales iniciales:
+## 9. Datos semilla y entorno demo
+
+`DataSeeder` se ejecuta al arrancar si detecta colecciones vacias.
+
+El seed actual prepara:
+
+- hospital principal `Hospital Reina Sofia`
+- usuario `ROOT`
+- usuario `HOSPITAL_ADMIN`
+- tres trabajadores de urgencias
+- contratos activos
+- ausencias pagadas y no pagadas
+- demandas de turno para los proximos dias
+- asignaciones mensuales para probar nomina
+- ajustes manuales
+- chats y grupo de urgencias
+
+Credenciales base:
 
 - `superadmin@trassierra.com` / `admin123`
 - `admin@hospital-reina-sofia.com` / `admin123`
-- `trabajador@hospital-reina-sofia.com` / `worker123`
+- `trabajador1@hospital-reina-sofia.com` / `worker123`
+- `trabajador2@hospital-reina-sofia.com` / `worker123`
+- `trabajador3@hospital-reina-sofia.com` / `worker123`
 
-## 10. Frontend: Pantallas y Flujos
+Importante:
 
-### 10.1 Rutas principales
+- si la base de datos ya tiene datos, el seed no recrea el escenario completo;
+- para una demo limpia conviene vaciar colecciones antes de arrancar.
+
+## 10. Rutas principales del frontend
 
 - `/login`
 - `/dashboard/root`
@@ -690,7 +718,9 @@ Credenciales iniciales:
 - `/dashboard/admin/announcements`
 - `/dashboard/admin/leave-requests`
 - `/dashboard/admin/payrolls`
+- `/dashboard/admin/operations`
 - `/dashboard/admin/chat`
+- `/dashboard/admin/audit`
 - `/dashboard/worker`
 - `/dashboard/worker/calendar`
 - `/dashboard/worker/leave-requests`
@@ -698,87 +728,123 @@ Credenciales iniciales:
 - `/dashboard/worker/chat`
 - `/dashboard/settings`
 
-### 10.2 Cliente API
+## 11. Endpoints principales del backend
 
-Archivo:
+Rutas base:
 
-- `front-end/lib/api.ts`
+- `/api/auth`
+- `/api/admin`
+- `/api/hospitals`
+- `/api/users`
+- `/api/leave-requests`
+- `/api/payrolls`
+- `/api/advanced-payroll`
+- `/api/hospital-settings`
+- `/api/shift-types`
+- `/api/scheduling`
+- `/api/worker-contracts`
+- `/api/chats`
+- `/api/work-groups`
+- `/api/notifications`
+- `/api/audit-logs`
 
-Funciones:
+## 12. Configuracion y despliegue local
 
-- añade `Authorization: Bearer <token>`
-- intenta refresh automatico ante `401`
-- redirige a `/login` si el refresh falla
+## 12.1 Backend
 
-## 11. Cambios Aplicados en Esta Actualizacion
+Desde la raiz:
 
-### 11.1 Backend
+```powershell
+.\gradlew bootRun
+```
 
-- se anadieron `GET /api/users/{id}` y `PUT /api/users/{id}`
-- se amplio `UpdateUserRequestDto` para soportar campos realmente usados por el frontend
-- se hizo actualizacion parcial de usuarios desde servicio
-- crear hospital ahora crea su admin asociado si se informa `adminEmail`
-- eliminar hospital ahora limpia datos relacionados
+La API escucha por defecto en:
 
-### 11.2 Frontend
+- `http://localhost:8080`
 
-- se reparo el JSX roto en `dashboard/root/hospitals`
-- se refactorizo `new-chat-dialog` para evitar componentes creados durante render
-- se configuro correctamente `turbopack.root`
-- se sustituyeron imagenes conflictivas para dejar `eslint` limpio
+## 12.2 Frontend
 
-## 12. Riesgos y Limitaciones Tecnicas
+Desde `front-end`:
+
+```powershell
+npm install
+npm run dev
+```
+
+La UI se sirve por defecto en:
+
+- `http://localhost:3000`
+
+## 12.3 Configuracion actual conocida
+
+En [application.properties](C:/Users/Josel/Documents/GitHub/TFG-Hospital/src/main/resources/application.properties) aparecen:
+
+- nombre de aplicacion
+- URI de MongoDB
+- nombre de base de datos
+- puerto del backend
+- URL base del frontend
+
+Recomendaciones:
+
+- sacar credenciales sensibles fuera del repositorio
+- usar variables de entorno o un fichero de secretos local
+
+## 13. Estado tecnico y limitaciones
 
 Puntos importantes del estado actual:
 
-- autenticacion en memoria, no persistente
-- contrasenas sin hash real
-- no hay autorizacion fuerte por rol en controladores
-- el generador de PDF de nominas es basico
-- hay validaciones de negocio minimas en varias operaciones
+- autenticacion basada en sesiones en memoria
+- contrasenas sin endurecimiento de produccion equivalente a una solucion completa con seguridad integrada
+- autorizacion de servidor mejorable
+- parte del valor del sistema depende del seed para demos
+- el PDF de nomina ya es funcional, pero visualmente es sencillo
 
-## 13. Mejoras Recomendadas
+Limitacion de verificacion en este entorno:
+
+- no he podido validar compilacion completa del backend ni build final del frontend aqui cuando requieren descargas externas, porque el entorno actual tiene restricciones de red
+
+## 14. Recomendaciones de mejora
 
 Prioridad alta:
 
-- migrar autenticacion a JWT real con expiracion persistente
-- hashear contrasenas con `BCrypt`
-- aplicar autorizacion por rol
-- quitar `ignoreBuildErrors`
-- anadir tests de integracion de endpoints
+- migrar autenticacion a JWT o Spring Security completo
+- externalizar secretos
+- reforzar autorizacion por rol en servidor
+- anadir tests unitarios y de integracion
 
 Prioridad media:
 
-- generar PDF real de nominas
-- validaciones DTO con Bean Validation
-- manejo global de excepciones
-- logs estructurados
+- enriquecer el PDF de nomina
+- reforzar validaciones declarativas en DTOs
+- mejorar observabilidad y logs
+- ampliar criterios de fairness en autoasignacion
 
-## 14. Ficheros Clave del Proyecto
+Prioridad funcional:
+
+- mas analitica y reportes
+- configuracion avanzada de festivos
+- historico de versiones de configuracion operativa
+
+## 15. Archivos clave para entender el sistema
 
 Backend:
 
-- `src/main/java/com/joseluu/hospital/RunApp.java`
-- `src/main/java/com/joseluu/hospital/controller/*`
-- `src/main/java/com/joseluu/hospital/service/*`
-- `src/main/java/com/joseluu/hospital/entity/*`
-- `src/main/resources/application.properties`
+- [RunApp.java](C:/Users/Josel/Documents/GitHub/TFG-Hospital/src/main/java/com/joseluu/hospital/RunApp.java)
+- [DataSeeder.java](C:/Users/Josel/Documents/GitHub/TFG-Hospital/src/main/java/com/joseluu/hospital/service/DataSeeder.java)
+- [SchedulingService.java](C:/Users/Josel/Documents/GitHub/TFG-Hospital/src/main/java/com/joseluu/hospital/service/SchedulingService.java)
+- [AdvancedPayrollService.java](C:/Users/Josel/Documents/GitHub/TFG-Hospital/src/main/java/com/joseluu/hospital/service/AdvancedPayrollService.java)
+- [PayrollService.java](C:/Users/Josel/Documents/GitHub/TFG-Hospital/src/main/java/com/joseluu/hospital/service/PayrollService.java)
 
 Frontend:
 
-- `front-end/app/*`
-- `front-end/components/*`
-- `front-end/contexts/auth-context.tsx`
-- `front-end/lib/api.ts`
-- `front-end/next.config.mjs`
+- [front-end/lib/api.ts](C:/Users/Josel/Documents/GitHub/TFG-Hospital/front-end/lib/api.ts)
+- [auth-context.tsx](C:/Users/Josel/Documents/GitHub/TFG-Hospital/front-end/contexts/auth-context.tsx)
+- [dashboard-shell.tsx](C:/Users/Josel/Documents/GitHub/TFG-Hospital/front-end/components/dashboard/dashboard-shell.tsx)
+- [admin operations](C:/Users/Josel/Documents/GitHub/TFG-Hospital/front-end/app/dashboard/admin/operations/page.tsx)
+- [admin payrolls](C:/Users/Josel/Documents/GitHub/TFG-Hospital/front-end/app/dashboard/admin/payrolls/page.tsx)
+- [worker payrolls](C:/Users/Josel/Documents/GitHub/TFG-Hospital/front-end/app/dashboard/worker/payrolls/page.tsx)
 
-## 15. Conclusion
+## 16. Conclusion
 
-El proyecto queda documentado sobre su implementacion real actual y con los desajustes principales entre frontend y backend corregidos. A dia de esta revision:
-
-- backend compila y pasa tests
-- frontend linta y construye correctamente
-- MongoDB local responde
-- los flujos principales del panel ya consumen endpoints existentes
-
-Si quieres, el siguiente paso razonable es que te deje tambien un `README.md` principal reescrito y coherente con este `documento.md`, o una coleccion `Postman`/`Bruno` con todos los endpoints listos para probar.
+`TFG-Hospital` ya cubre bastante mas que una simple demo CRUD. Su valor diferencial esta en unir administracion, planificacion, nomina y comunicacion en una sola base de codigo. La arquitectura es comprensible y extensible, y el modelo documental encaja bien con la flexibilidad del dominio. El siguiente salto de calidad pasa por reforzar seguridad, validacion y pruebas automatizadas sin perder la amplitud funcional ya conseguida.

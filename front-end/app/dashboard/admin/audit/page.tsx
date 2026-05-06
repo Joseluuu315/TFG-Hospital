@@ -28,12 +28,12 @@ export default function AdminAuditPage() {
         setLogs(response.data);
       } catch (error) {
         console.error(error);
-        toast.error('No se pudo cargar la auditoría');
+        toast.error('No se pudo cargar la auditoria');
       } finally {
         setIsLoading(false);
       }
     };
-    load();
+    void load();
   }, [hospitalId]);
 
   if (isLoading) {
@@ -42,48 +42,70 @@ export default function AdminAuditPage() {
 
   return (
     <DashboardShell
-      title="Auditoría"
-      description="Trazabilidad de cambios sensibles sobre turnos, hospitales y nóminas"
+      title="Auditoria"
+      description="Trazabilidad de cambios sensibles sobre turnos, hospitales y nominas"
     >
       <Card>
         <CardHeader>
           <CardTitle>Actividad reciente</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table className="min-w-[920px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Acción</TableHead>
-                  <TableHead>Entidad</TableHead>
-                  <TableHead>ID entidad</TableHead>
-                  <TableHead>Actor</TableHead>
-                  <TableHead>Detalle</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {logs.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground">
-                      No hay actividad auditada todavía.
-                    </TableCell>
-                  </TableRow>
-                ) : logs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell>{formatDate(log.createdAt)}</TableCell>
-                    <TableCell>
+          {logs.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Badge variant="outline">0 registros</Badge>
+              <p className="mt-3 text-sm text-muted-foreground">No hay actividad auditada todavia.</p>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-3 md:hidden">
+                {logs.map((log) => (
+                  <div key={log.id} className="rounded-xl border p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{log.entityType}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(log.createdAt)}</p>
+                      </div>
                       <Badge variant="outline">{log.action}</Badge>
-                    </TableCell>
-                    <TableCell>{log.entityType}</TableCell>
-                    <TableCell className="font-mono text-xs">{log.entityId}</TableCell>
-                    <TableCell>{log.actorUserId || 'Sistema'}</TableCell>
-                    <TableCell className="max-w-[420px] truncate">{log.details}</TableCell>
-                  </TableRow>
+                    </div>
+                    <div className="mt-3 space-y-2 text-sm">
+                      <p><span className="font-medium">Entidad:</span> <span className="break-all">{log.entityId}</span></p>
+                      <p><span className="font-medium">Actor:</span> {log.actorUserId || 'Sistema'}</p>
+                      <p className="break-words text-muted-foreground">{log.details}</p>
+                    </div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
-          </div>
+              </div>
+
+              <div className="hidden overflow-x-auto md:block">
+                <Table className="min-w-[920px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Accion</TableHead>
+                      <TableHead>Entidad</TableHead>
+                      <TableHead>ID entidad</TableHead>
+                      <TableHead>Actor</TableHead>
+                      <TableHead>Detalle</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {logs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell>{formatDate(log.createdAt)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{log.action}</Badge>
+                        </TableCell>
+                        <TableCell>{log.entityType}</TableCell>
+                        <TableCell className="font-mono text-xs">{log.entityId}</TableCell>
+                        <TableCell>{log.actorUserId || 'Sistema'}</TableCell>
+                        <TableCell className="max-w-[420px] whitespace-normal break-words">{log.details}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </DashboardShell>
