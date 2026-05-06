@@ -68,6 +68,7 @@ public class DataSeeder implements ApplicationRunner {
     private final PayrollAdjustmentRepository payrollAdjustmentRepository;
     private final PayrollItemRepository payrollItemRepository;
     private final AdvancedPayrollService advancedPayrollService;
+    private final PasswordService passwordService;
 
     private String hospitalId;
     private String rootId;
@@ -91,7 +92,8 @@ public class DataSeeder implements ApplicationRunner {
                        WorkerContractRepository workerContractRepository,
                        PayrollAdjustmentRepository payrollAdjustmentRepository,
                        PayrollItemRepository payrollItemRepository,
-                       AdvancedPayrollService advancedPayrollService) {
+                       AdvancedPayrollService advancedPayrollService,
+                       PasswordService passwordService) {
         this.hospitalRepository = hospitalRepository;
         this.userRepository = userRepository;
         this.payrollRepository = payrollRepository;
@@ -106,6 +108,7 @@ public class DataSeeder implements ApplicationRunner {
         this.payrollAdjustmentRepository = payrollAdjustmentRepository;
         this.payrollItemRepository = payrollItemRepository;
         this.advancedPayrollService = advancedPayrollService;
+        this.passwordService = passwordService;
     }
 
     /**
@@ -114,6 +117,7 @@ public class DataSeeder implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         hydrateExistingReferences();
+        migrateLegacyPasswordHashes();
         migrateLegacySupportChats();
         if (hospitalRepository.count() == 0) {
             seedHospitals();
@@ -178,6 +182,23 @@ public class DataSeeder implements ApplicationRunner {
                 urgentGroupChatId = chat.getId();
             }
         });
+    }
+
+    /**
+     * Convierte contrasenas historicas en claro a BCrypt antes de permitir login.
+     */
+    private void migrateLegacyPasswordHashes() {
+        List<UserDocument> migratedUsers = userRepository.findAll().stream()
+                .filter(user -> passwordService.needsMigration(user.getPassword()))
+                .peek(user -> {
+                    user.setPassword(passwordService.encode(user.getPassword()));
+                    user.setUpdatedAt(LocalDateTime.now().toString());
+                })
+                .toList();
+
+        if (!migratedUsers.isEmpty()) {
+            userRepository.saveAll(migratedUsers);
+        }
     }
 
     /**
@@ -260,7 +281,7 @@ public class DataSeeder implements ApplicationRunner {
                 .email("superadmin@trassierra.com")
                 .dni("12345678A")
                 .role(UserRole.ROOT)
-                .password("admin123")
+                .password(passwordService.encode("admin123"))
                 .enabled(true)
                 .accountNonLocked(true)
                 .createdAt(now.toString())
@@ -281,7 +302,7 @@ public class DataSeeder implements ApplicationRunner {
                 .hospitalName("Hospital Reina Sofia")
                 .department("Administración")
                 .jobTitle("Directora Ejecutiva")
-                .password("admin123")
+                .password(passwordService.encode("admin123"))
                 .enabled(true)
                 .accountNonLocked(true)
                 .createdAt(now.toString())
@@ -303,7 +324,7 @@ public class DataSeeder implements ApplicationRunner {
                 .department("Urgencias")
                 .jobTitle("Enfermero")
                 .baseSalary(2200.0)
-                .password("worker123")
+                .password(passwordService.encode("worker123"))
                 .enabled(true)
                 .accountNonLocked(true)
                 .calendarEvents(buildCalendarEvents(workerRefId))
@@ -326,7 +347,7 @@ public class DataSeeder implements ApplicationRunner {
                 .department("Urgencias")
                 .jobTitle("Enfermera")
                 .baseSalary(2000.0)
-                .password("worker123")
+                .password(passwordService.encode("worker123"))
                 .enabled(true)
                 .accountNonLocked(true)
                 .calendarEvents(buildCalendarEvents(worker2RefId))
@@ -349,7 +370,7 @@ public class DataSeeder implements ApplicationRunner {
                 .department("Urgencias")
                 .jobTitle("Auxiliar Enfermeria")
                 .baseSalary(1800.0)
-                .password("worker123")
+                .password(passwordService.encode("worker123"))
                 .enabled(true)
                 .accountNonLocked(true)
                 .calendarEvents(buildCalendarEvents(worker3RefId))

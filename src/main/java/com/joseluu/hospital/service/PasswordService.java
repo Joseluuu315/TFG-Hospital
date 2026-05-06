@@ -28,10 +28,7 @@ public class PasswordService {
         if (rawPassword == null || storedPassword == null) {
             return false;
         }
-        if (isEncoded(storedPassword)) {
-            return passwordEncoder.matches(rawPassword, storedPassword);
-        }
-        return rawPassword.equals(storedPassword);
+        return isEncoded(storedPassword) && passwordEncoder.matches(rawPassword, storedPassword);
     }
 
     /**

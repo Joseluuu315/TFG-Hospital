@@ -110,7 +110,7 @@ El frontend consume el backend a traves de `/api/*`. Next aplica un rewrite haci
 - Spring Web MVC
 - Spring Data MongoDB
 - Spring Validation
-- Spring Security Crypto
+- Spring Security
 - Actuator
 - Lombok
 - Gradle
@@ -173,15 +173,20 @@ Puede:
 
 ## 6.1 Autenticacion y sesion
 
-La autenticacion actual no usa JWT persistido. El backend valida credenciales contra MongoDB y genera:
+La autenticacion del backend esta integrada con Spring Security y funciona con tokens Bearer persistidos en MongoDB. El login valida credenciales contra la coleccion de usuarios y genera:
 
 - `accessToken`
 - `refreshToken`
 
-Ambos se mantienen en memoria del backend. Esto implica:
+Los tokens no se guardan en claro: se almacena su hash SHA-256 en la coleccion `auth_sessions`, junto con el usuario asociado y las fechas de caducidad. Esto permite que las sesiones sobrevivan a un reinicio del backend y que el logout o el cambio de contrasena invaliden sesiones persistidas.
 
-- las sesiones se pierden al reiniciar el servidor
-- no hay una capa completa de Spring Security con filtros y autorizacion fuerte
+La proteccion HTTP se realiza con:
+
+- `SecurityConfig`, que define una API stateless, rutas publicas de autenticacion y autenticacion obligatoria para el resto de endpoints
+- `BearerTokenAuthenticationFilter`, que lee `Authorization: Bearer ...`, valida el token persistido y carga el usuario autenticado en el `SecurityContext`
+- `AuthenticatedUserPrincipal`, que expone el usuario y su rol como autoridad `ROLE_*`
+
+Las contrasenas se guardan con BCrypt. Las contrasenas historicas en texto plano se migran automaticamente a BCrypt al arrancar la aplicacion mediante `DataSeeder`, y el login ya no compara contrasenas en claro.
 
 En el frontend, `auth-context.tsx` y `lib/api.ts`:
 
@@ -794,21 +799,21 @@ Recomendaciones:
 
 Puntos importantes del estado actual:
 
-- autenticacion basada en sesiones en memoria
-- contrasenas sin endurecimiento de produccion equivalente a una solucion completa con seguridad integrada
-- autorizacion de servidor mejorable
+- autenticacion basada en Spring Security con filtro Bearer real
+- sesiones persistidas en MongoDB mediante hashes de access y refresh token
+- contrasenas protegidas con BCrypt y migracion automatica de valores historicos en claro
+- autorizacion por endpoint presente a nivel de autenticacion; todavia se puede ampliar con reglas finas por rol
 - parte del valor del sistema depende del seed para demos
 - el PDF de nomina ya es funcional, pero visualmente es sencillo
 
-Limitacion de verificacion en este entorno:
+Verificacion en este entorno:
 
-- no he podido validar compilacion completa del backend ni build final del frontend aqui cuando requieren descargas externas, porque el entorno actual tiene restricciones de red
+- backend validado con `./gradlew.bat build`
 
 ## 14. Recomendaciones de mejora
 
 Prioridad alta:
 
-- migrar autenticacion a JWT o Spring Security completo
 - externalizar secretos
 - reforzar autorizacion por rol en servidor
 - anadir tests unitarios y de integracion

@@ -7,7 +7,9 @@ import com.joseluu.hospital.dto.MessageResponseDto;
 import com.joseluu.hospital.dto.RefreshTokenRequestDto;
 import com.joseluu.hospital.dto.ResetPasswordRequestDto;
 import com.joseluu.hospital.dto.UserDto;
+import com.joseluu.hospital.entity.AuthSessionDocument;
 import com.joseluu.hospital.entity.UserDocument;
+import com.joseluu.hospital.repository.AuthSessionRepository;
 import com.joseluu.hospital.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.IncorrectResultSizeDataAccessException;
@@ -22,36 +24,41 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Servicio de autenticacion basado en tokens en memoria.
+ * Servicio de autenticacion basado en tokens persistidos.
  */
 @Service
 public class AuthService {
     private final UserRepository userRepository;
+    private final AuthSessionRepository authSessionRepository;
     private final UserService userService;
     private final PasswordService passwordService;
     private final ResendEmailService resendEmailService;
     private final String frontendBaseUrl;
     private final long passwordResetTtlMinutes;
-    private final Map<String, AuthSession> sessionsByAccessToken = new ConcurrentHashMap<>();
-    private final Map<String, AuthSession> sessionsByRefreshToken = new ConcurrentHashMap<>();
+    private final long accessTokenTtlMinutes;
+    private final long refreshTokenTtlDays;
 
     public AuthService(UserRepository userRepository,
+                       AuthSessionRepository authSessionRepository,
                        UserService userService,
                        PasswordService passwordService,
                        ResendEmailService resendEmailService,
                        @Value("${app.frontend.base-url}") String frontendBaseUrl,
-                       @Value("${app.auth.password-reset.ttl-minutes:60}") long passwordResetTtlMinutes) {
+                       @Value("${app.auth.password-reset.ttl-minutes:60}") long passwordResetTtlMinutes,
+                       @Value("${app.auth.access-token.ttl-minutes:720}") long accessTokenTtlMinutes,
+                       @Value("${app.auth.refresh-token.ttl-days:30}") long refreshTokenTtlDays) {
         this.userRepository = userRepository;
+        this.authSessionRepository = authSessionRepository;
         this.userService = userService;
         this.passwordService = passwordService;
         this.resendEmailService = resendEmailService;
         this.frontendBaseUrl = frontendBaseUrl;
         this.passwordResetTtlMinutes = passwordResetTtlMinutes;
+        this.accessTokenTtlMinutes = accessTokenTtlMinutes;
+        this.refreshTokenTtlDays = refreshTokenTtlDays;
     }
 
     /**
@@ -64,7 +71,6 @@ public class AuthService {
         if (!passwordService.matches(request.getPassword(), userDocument.getPassword())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciales invalidas");
         }
-        migratePasswordIfNeeded(userDocument, request.getPassword());
         userDocument.setLastSeenAt(java.time.LocalDateTime.now().toString());
         userRepository.save(userDocument);
 
@@ -137,8 +143,10 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Refresh token requerido");
         }
 
-        AuthSession session = requireSessionByRefreshToken(request.getRefreshToken());
-        return createSession(session.getUser());
+        AuthSessionDocument session = requireSessionByRefreshToken(request.getRefreshToken());
+        UserDto user = loadUser(session.getUserId());
+        authSessionRepository.delete(session);
+        return createSession(user);
     }
 
     /**
@@ -146,10 +154,7 @@ public class AuthService {
      */
     public void logout(String bearer) {
         String token = extractToken(bearer);
-        AuthSession session = sessionsByAccessToken.remove(token);
-        if (session != null) {
-            sessionsByRefreshToken.remove(session.getRefreshToken());
-        }
+        authSessionRepository.deleteByAccessTokenHash(hashToken(token));
     }
 
     /**
@@ -157,7 +162,8 @@ public class AuthService {
      */
     public UserDto getUserFromBearer(String bearer) {
         String token = extractToken(bearer);
-        return requireSessionByAccessToken(token).getUser();
+        AuthSessionDocument session = requireSessionByAccessToken(token);
+        return loadUser(session.getUserId());
     }
 
     /**
@@ -166,10 +172,19 @@ public class AuthService {
     private AuthResponseDto createSession(UserDto user) {
         String accessToken = UUID.randomUUID().toString();
         String refreshToken = UUID.randomUUID().toString();
-        AuthSession session = new AuthSession(accessToken, refreshToken, user);
+        Instant now = Instant.now();
 
-        sessionsByAccessToken.put(accessToken, session);
-        sessionsByRefreshToken.put(refreshToken, session);
+        AuthSessionDocument session = AuthSessionDocument.builder()
+                .id(UUID.randomUUID().toString())
+                .accessTokenHash(hashToken(accessToken))
+                .refreshTokenHash(hashToken(refreshToken))
+                .userId(user.getId())
+                .accessTokenExpiresAt(now.plus(Duration.ofMinutes(accessTokenTtlMinutes)).toString())
+                .refreshTokenExpiresAt(now.plus(Duration.ofDays(refreshTokenTtlDays)).toString())
+                .createdAt(now.toString())
+                .updatedAt(now.toString())
+                .build();
+        authSessionRepository.save(session);
 
         return AuthResponseDto.builder()
                 .accessToken(accessToken)
@@ -229,10 +244,12 @@ public class AuthService {
     /**
      * Obtiene una sesion por access token o lanza error.
      */
-    private AuthSession requireSessionByAccessToken(String accessToken) {
-        AuthSession session = sessionsByAccessToken.get(accessToken);
-        if (session == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token no valido");
+    private AuthSessionDocument requireSessionByAccessToken(String accessToken) {
+        AuthSessionDocument session = authSessionRepository.findByAccessTokenHash(hashToken(accessToken))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token no valido"));
+        if (isExpired(session.getAccessTokenExpiresAt())) {
+            authSessionRepository.delete(session);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token caducado");
         }
         return session;
     }
@@ -240,20 +257,14 @@ public class AuthService {
     /**
      * Obtiene una sesion por refresh token o lanza error.
      */
-    private AuthSession requireSessionByRefreshToken(String refreshToken) {
-        AuthSession session = sessionsByRefreshToken.get(refreshToken);
-        if (session == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token invalido");
+    private AuthSessionDocument requireSessionByRefreshToken(String refreshToken) {
+        AuthSessionDocument session = authSessionRepository.findByRefreshTokenHash(hashToken(refreshToken))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token invalido"));
+        if (isExpired(session.getRefreshTokenExpiresAt())) {
+            authSessionRepository.delete(session);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token caducado");
         }
         return session;
-    }
-
-    private void migratePasswordIfNeeded(UserDocument userDocument, String rawPassword) {
-        if (!passwordService.needsMigration(userDocument.getPassword())) {
-            return;
-        }
-        userDocument.setPassword(passwordService.encode(rawPassword));
-        userRepository.save(userDocument);
     }
 
     private String buildResetLink(String rawToken) {
@@ -284,42 +295,10 @@ public class AuthService {
     }
 
     private void invalidateSessionsForUser(String userId) {
-        sessionsByAccessToken.entrySet().removeIf(entry -> {
-            AuthSession session = entry.getValue();
-            if (!userId.equals(session.getUser().getId())) {
-                return false;
-            }
-            sessionsByRefreshToken.remove(session.getRefreshToken());
-            return true;
-        });
+        authSessionRepository.deleteByUserId(userId);
     }
 
-    private static class AuthSession {
-        private final String accessToken;
-        private final String refreshToken;
-        private final UserDto user;
-
-        /**
-         * Crea una sesion en memoria.
-         */
-        private AuthSession(String accessToken, String refreshToken, UserDto user) {
-            this.accessToken = accessToken;
-            this.refreshToken = refreshToken;
-            this.user = user;
-        }
-
-        /**
-         * Devuelve el refresh token de la sesion.
-         */
-        public String getRefreshToken() {
-            return refreshToken;
-        }
-
-        /**
-         * Devuelve el usuario asociado a la sesion.
-         */
-        public UserDto getUser() {
-            return user;
-        }
+    private boolean isExpired(String expiresAt) {
+        return expiresAt == null || Instant.parse(expiresAt).isBefore(Instant.now());
     }
 }
