@@ -11,8 +11,11 @@ import com.joseluu.hospital.dto.UserPresenceDto;
 import com.joseluu.hospital.service.AuthService;
 import com.joseluu.hospital.service.LeaveRequestService;
 import com.joseluu.hospital.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -22,6 +25,7 @@ import java.util.List;
 /**
  * Endpoints de gestion de usuarios y autoservicio.
  */
+@Tag(name = "Usuarios", description = "Gestion de usuarios del sistema y endpoints de autoservicio (/me)")
 @RestController
 @RequestMapping("/api/users")
 public class UsersController {
@@ -39,7 +43,10 @@ public class UsersController {
 
     /**
      * Lista todos los usuarios del sistema.
+     * Accesible por cualquier usuario autenticado (necesario para el directorio del chat).
      */
+    @Operation(summary = "Listar usuarios", description = "Devuelve todos los usuarios del sistema.")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping
     public List<UserDto> getAll() {
         return userService.getAll();
@@ -48,6 +55,8 @@ public class UsersController {
     /**
      * Obtiene un usuario concreto por id.
      */
+    @Operation(summary = "Obtener usuario por id")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/{id}")
     public UserDto getById(@PathVariable String id) {
         return userService.getById(id);
@@ -56,6 +65,8 @@ public class UsersController {
     /**
      * Devuelve el estado de presencia de los usuarios indicados.
      */
+    @Operation(summary = "Estado de presencia", description = "Devuelve la presencia en linea de los usuarios indicados por id.")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/presence")
     public List<UserPresenceDto> getPresence(@RequestParam(name = "ids") List<String> userIds) {
         return userService.getPresence(userIds);
@@ -63,7 +74,10 @@ public class UsersController {
 
     /**
      * Crea un usuario trabajador.
+     * Solo HOSPITAL_ADMIN o ROOT pueden registrar nuevos empleados.
      */
+    @Operation(summary = "Crear trabajador", description = "Da de alta un nuevo trabajador en el hospital. Solo HOSPITAL_ADMIN o ROOT.")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @PostMapping
     public UserDto create(@Valid @RequestBody CreateUserRequestDto request) {
         return userService.createWorker(request);
@@ -71,7 +85,10 @@ public class UsersController {
 
     /**
      * Actualiza un usuario concreto.
+     * Solo HOSPITAL_ADMIN o ROOT pueden editar datos de otros usuarios.
      */
+    @Operation(summary = "Actualizar usuario", description = "Actualiza los datos operativos de un usuario. Solo HOSPITAL_ADMIN o ROOT.")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @PutMapping("/{id}")
     public UserDto update(@PathVariable String id, @RequestBody UpdateUserRequestDto request) {
         return userService.updateUser(id, request);
@@ -80,6 +97,8 @@ public class UsersController {
     /**
      * Devuelve el calendario del usuario autenticado para el mes indicado.
      */
+    @Operation(summary = "Mi calendario", description = "Devuelve los eventos de calendario del mes indicado para el usuario autenticado.")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/me/calendar")
     public List<CalendarEventDto> getMyCalendar(@RequestHeader(name = "Authorization", required = false) String authorization,
                                                  @RequestParam(required = false) String month) {
@@ -91,6 +110,8 @@ public class UsersController {
     /**
      * Devuelve las solicitudes de ausencia del usuario autenticado.
      */
+    @Operation(summary = "Mis solicitudes de ausencia")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/me/leave-requests")
     public List<LeaveRequestDto> getMyLeaveRequests(@RequestHeader(name = "Authorization", required = false) String authorization) {
         UserDto user = authService.getUserFromBearer(authorization);
@@ -100,6 +121,8 @@ public class UsersController {
     /**
      * Crea una solicitud de ausencia para el usuario autenticado.
      */
+    @Operation(summary = "Solicitar ausencia", description = "Crea una nueva solicitud de ausencia para el usuario autenticado.")
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/me/leave-requests")
     public LeaveRequestDto createLeaveRequest(@RequestHeader(name = "Authorization", required = false) String authorization,
                                               @Valid @RequestBody LeaveRequestRequestDto requestDto) {
@@ -107,7 +130,11 @@ public class UsersController {
         return leaveRequestService.createForUser(user.getId(), requestDto.getStartDate(), requestDto.getEndDate(), requestDto.getReason());
     }
 
-    /** Actualiza los datos del usuario autenticado. */
+    /**
+     * Actualiza los datos del usuario autenticado.
+     */
+    @Operation(summary = "Actualizar mi perfil")
+    @PreAuthorize("isAuthenticated()")
     @PutMapping("/me")
     public UserDto updateMyself(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -119,6 +146,8 @@ public class UsersController {
     /**
      * Registra actividad reciente del usuario autenticado.
      */
+    @Operation(summary = "Heartbeat de presencia", description = "Marca al usuario como activo recientemente.")
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/me/presence")
     public ResponseEntity<Void> heartbeat(@RequestHeader(name = "Authorization", required = false) String authorization) {
         UserDto user = authService.getUserFromBearer(authorization);
@@ -126,7 +155,12 @@ public class UsersController {
         return ResponseEntity.noContent().build();
     }
 
-    /** Añade un evento de calendario a un trabajador (uso admin). */
+    /**
+     * Añade un evento de calendario a un trabajador (uso admin).
+     * Solo HOSPITAL_ADMIN o ROOT.
+     */
+    @Operation(summary = "Añadir evento de calendario (admin)", description = "Agrega un turno, vacacion o festivo al calendario del trabajador. Solo HOSPITAL_ADMIN o ROOT.")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @PostMapping("/{id}/calendar-events")
     public CalendarEventDto addCalendarEvent(
             @PathVariable String id,
@@ -134,7 +168,12 @@ public class UsersController {
         return userService.addCalendarEvent(id, dto);
     }
 
-    /** Elimina un evento de calendario de un trabajador (uso admin). */
+    /**
+     * Elimina un evento de calendario de un trabajador (uso admin).
+     * Solo HOSPITAL_ADMIN o ROOT.
+     */
+    @Operation(summary = "Eliminar evento de calendario (admin)")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @DeleteMapping("/{id}/calendar-events/{eventId}")
     public ResponseEntity<Void> removeCalendarEvent(
             @PathVariable String id,
@@ -143,7 +182,12 @@ public class UsersController {
         return ResponseEntity.noContent().build();
     }
 
-    /** Edita un evento de calendario de un trabajador (uso admin). */
+    /**
+     * Edita un evento de calendario de un trabajador (uso admin).
+     * Solo HOSPITAL_ADMIN o ROOT.
+     */
+    @Operation(summary = "Editar evento de calendario (admin)")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @PutMapping("/{id}/calendar-events/{eventId}")
     public CalendarEventDto updateCalendarEvent(
             @PathVariable String id,

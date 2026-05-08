@@ -42,6 +42,7 @@ export default function AdminChatPage() {
   const [workers, setWorkers] = useState<WorkerOption[]>([]);
   const [directoryUsers, setDirectoryUsers] = useState<User[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
+  const [mobileView, setMobileView] = useState<'sidebar' | 'window'>('sidebar');
   const [messages, setMessages] = useState<UiChatMessage[]>([]);
   const [showNewChatDialog, setShowNewChatDialog] = useState(false);
   const [showInfoSheet, setShowInfoSheet] = useState(false);
@@ -207,6 +208,11 @@ export default function AdminChatPage() {
     } catch (error) { console.error('Error eliminando grupo', error); toast.error('No se pudo eliminar el grupo.'); }
   };
 
+  const handleSelectChat = (chat: Chat) => {
+    setSelectedChat(chat);
+    setMobileView('window');
+  };
+
   const handleOpenGroupChat = (group: WorkGroup) => {
     const linkedChat = chats.find((chat) => chat.id === group.chatId);
     if (!linkedChat) { toast.error('El chat del grupo aun no esta disponible.'); return; }
@@ -279,12 +285,13 @@ export default function AdminChatPage() {
 
           {/* TAB: CHAT */}
           <TabsContent value="chat" className="mt-4">
-            <div className="flex min-h-[72dvh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:h-[calc(100dvh-11.5rem)] lg:flex-row">
-              <div className="max-h-96 w-full shrink-0 overflow-hidden border-b border-slate-100 lg:max-h-none lg:w-[23rem] lg:border-b-0 lg:border-r">
+            <div className="flex overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:h-[calc(100dvh-11.5rem)] lg:flex-row" style={{minHeight: 'calc(100dvh - 14rem)'}}>
+              {/* Sidebar: visible en móvil sólo si mobileView === 'sidebar' */}
+              <div className={`w-full shrink-0 overflow-hidden border-b border-slate-100 lg:w-[23rem] lg:border-b-0 lg:border-r lg:flex lg:flex-col ${mobileView === 'window' ? 'hidden lg:flex' : 'flex flex-col'}`}>
                 <ChatSidebar
                     chats={chats}
                     selectedChatId={selectedChat?.id || null}
-                    onSelectChat={setSelectedChat}
+                    onSelectChat={handleSelectChat}
                     onNewChat={() => setShowNewChatDialog(true)}
                     showNewChatButton
                     userRole={user?.role}
@@ -293,7 +300,20 @@ export default function AdminChatPage() {
                     presenceByUserId={presenceByUserId}
                 />
               </div>
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-50/50">
+              {/* Chat window: visible en móvil sólo si mobileView === 'window' */}
+              <div className={`min-h-0 flex-col overflow-hidden bg-slate-50/50 ${mobileView === 'sidebar' ? 'hidden lg:flex lg:flex-1' : 'flex flex-1'}`}>
+                {/* Botón volver — sólo en móvil */}
+                {mobileView === 'window' && (
+                  <div className="flex items-center gap-1 border-b border-slate-100 bg-white px-2 py-1.5 lg:hidden">
+                    <button
+                      onClick={() => setMobileView('sidebar')}
+                      className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 active:bg-slate-200"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Chats
+                    </button>
+                  </div>
+                )}
                 {selectedChat ? (
                     <ChatWindow
                         chat={selectedChat}
@@ -364,7 +384,8 @@ export default function AdminChatPage() {
                             </div>
                             <button
                                 onClick={() => handleDeleteGroup(group.id)}
-                                className="shrink-0 rounded-lg p-1.5 text-slate-300 opacity-0 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                                className="shrink-0 rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-500 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
+                                aria-label="Eliminar grupo"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>

@@ -428,64 +428,83 @@ export default function PayrollsPage() {
       </Card>
 
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="w-[min(96vw,1100px)] max-w-5xl max-h-[90vh] overflow-hidden p-0">
-          <DialogHeader>
-            <DialogTitle className="px-6 pt-6">
+        <DialogContent className="flex flex-col w-[min(96vw,1100px)] max-w-5xl max-h-[92dvh] overflow-hidden p-0">
+          <DialogHeader className="px-5 pt-5 pb-0 shrink-0">
+            <DialogTitle>
               Detalle de nómina {selectedPayroll ? `- ${selectedPayroll.workerFullName} (${formatMonthYear(`${selectedPayroll.period}-01`)})` : ''}
             </DialogTitle>
           </DialogHeader>
           {selectedPayroll && (
-            <div className="space-y-4 overflow-y-auto px-6 pb-6">
-              <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-4 overflow-y-auto px-4 pb-5 pt-4 sm:px-6">
+              <div className="grid gap-3 grid-cols-3">
                 <Card>
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">Bruto</CardTitle></CardHeader>
-                  <CardContent className="text-xl font-semibold">{formatCurrency(selectedPayroll.grossSalary)}</CardContent>
+                  <CardHeader className="pb-1 px-3 pt-3"><CardTitle className="text-xs text-muted-foreground">Bruto</CardTitle></CardHeader>
+                  <CardContent className="px-3 pb-3 text-lg font-semibold">{formatCurrency(selectedPayroll.grossSalary)}</CardContent>
                 </Card>
                 <Card>
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">Deducciones</CardTitle></CardHeader>
-                  <CardContent className="text-xl font-semibold text-destructive">
+                  <CardHeader className="pb-1 px-3 pt-3"><CardTitle className="text-xs text-muted-foreground">Deducciones</CardTitle></CardHeader>
+                  <CardContent className="px-3 pb-3 text-lg font-semibold text-destructive">
                     {formatCurrency(selectedPayroll.socialSecurityWorker + selectedPayroll.incomeTaxWithholding + selectedPayroll.otherDeductions)}
                   </CardContent>
                 </Card>
                 <Card>
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">Neto</CardTitle></CardHeader>
-                  <CardContent className="text-xl font-semibold text-emerald-600">{formatCurrency(selectedPayroll.netSalary)}</CardContent>
+                  <CardHeader className="pb-1 px-3 pt-3"><CardTitle className="text-xs text-muted-foreground">Neto</CardTitle></CardHeader>
+                  <CardContent className="px-3 pb-3 text-lg font-semibold text-emerald-600">{formatCurrency(selectedPayroll.netSalary)}</CardContent>
                 </Card>
               </div>
 
               <Card>
-                <CardHeader>
-                  <CardTitle>Líneas de cálculo</CardTitle>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Líneas de cálculo</CardTitle>
                 </CardHeader>
-                <CardContent className="overflow-x-auto">
-                  <Table className="min-w-[760px]">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Concepto</TableHead>
-                        <TableHead className="text-right">Cantidad</TableHead>
-                        <TableHead className="text-right">Unitario</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedItems.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={4} className="text-center text-muted-foreground">
-                            No hay conceptos detallados disponibles.
-                          </TableCell>
-                        </TableRow>
-                      ) : selectedItems.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="max-w-[420px] whitespace-normal break-words font-medium">{item.description}</TableCell>
-                          <TableCell className="text-right whitespace-nowrap">{item.quantity}</TableCell>
-                          <TableCell className="text-right whitespace-nowrap">{formatCurrency(item.unitAmount)}</TableCell>
-                          <TableCell className={`text-right whitespace-nowrap font-medium ${item.totalAmount >= 0 ? 'text-foreground' : 'text-destructive'}`}>
+                <CardContent className="p-0">
+                  {/* Vista tarjetas — móvil */}
+                  <div className="md:hidden divide-y">
+                    {selectedItems.length === 0 ? (
+                      <p className="py-6 text-center text-sm text-muted-foreground px-4">No hay conceptos detallados.</p>
+                    ) : selectedItems.map((item) => (
+                      <div key={item.id} className="px-4 py-3 space-y-1">
+                        <p className="text-sm font-medium">{item.description}</p>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>{item.quantity} × {formatCurrency(item.unitAmount)}</span>
+                          <span className={`font-semibold ${item.totalAmount >= 0 ? 'text-foreground' : 'text-destructive'}`}>
                             {formatCurrency(item.totalAmount)}
-                          </TableCell>
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Vista tabla — desktop */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table className="min-w-[600px]">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Concepto</TableHead>
+                          <TableHead className="text-right">Cantidad</TableHead>
+                          <TableHead className="text-right">Unitario</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedItems.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center text-muted-foreground">
+                              No hay conceptos detallados disponibles.
+                            </TableCell>
+                          </TableRow>
+                        ) : selectedItems.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="max-w-[420px] whitespace-normal break-words font-medium">{item.description}</TableCell>
+                            <TableCell className="text-right whitespace-nowrap">{item.quantity}</TableCell>
+                            <TableCell className="text-right whitespace-nowrap">{formatCurrency(item.unitAmount)}</TableCell>
+                            <TableCell className={`text-right whitespace-nowrap font-medium ${item.totalAmount >= 0 ? 'text-foreground' : 'text-destructive'}`}>
+                              {formatCurrency(item.totalAmount)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             </div>

@@ -440,7 +440,7 @@ export default function AdminOperationsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            className="h-9 w-9 text-destructive hover:text-destructive"
                             onClick={() => handleDeleteShiftType(st.code)}
                             aria-label="Eliminar tipo de turno"
                           >
@@ -594,7 +594,7 @@ export default function AdminOperationsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            className="h-9 w-9 text-destructive hover:text-destructive"
                             onClick={() => req.id && handleDeleteRequirement(req.id)}
                             aria-label="Eliminar demanda"
                           >
@@ -649,7 +649,7 @@ export default function AdminOperationsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            className="h-9 w-9 text-destructive hover:text-destructive"
                             onClick={() => handleCancelAssignment(assignment.id)}
                             aria-label="Cancelar asignación"
                           >

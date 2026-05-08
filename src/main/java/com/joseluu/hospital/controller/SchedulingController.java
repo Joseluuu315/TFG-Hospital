@@ -7,8 +7,11 @@ import com.joseluu.hospital.dto.ShiftRequirementDto;
 import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.service.AuthService;
 import com.joseluu.hospital.service.SchedulingService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,6 +19,7 @@ import java.util.List;
 /**
  * Endpoints para demandas y asignaciones de turnos.
  */
+@Tag(name = "Planificacion de turnos", description = "Demandas de turno, autoasignacion y asignacion manual")
 @RestController
 public class SchedulingController {
     private final SchedulingService schedulingService;
@@ -26,7 +30,12 @@ public class SchedulingController {
         this.authService = authService;
     }
 
-    /** Crea una demanda de turno para un hospital. */
+    /**
+     * Crea una demanda de turno para un hospital.
+     * Solo HOSPITAL_ADMIN o ROOT.
+     */
+    @Operation(summary = "Crear demanda de turno", description = "Registra cuantos trabajadores se necesitan para un turno y fecha concretos.")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @PostMapping("/api/hospitals/{hospitalId}/shift-requirements")
     public ShiftRequirementDto createRequirement(
             @PathVariable String hospitalId,
@@ -34,7 +43,12 @@ public class SchedulingController {
         return schedulingService.createRequirement(hospitalId, request);
     }
 
-    /** Obtiene la lista de demandas de turno de un hospital en un rango. */
+    /**
+     * Obtiene la lista de demandas de turno de un hospital en un rango.
+     * Accesible por cualquier usuario autenticado del hospital.
+     */
+    @Operation(summary = "Listar demandas de turno")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/api/hospitals/{hospitalId}/shift-requirements")
     public List<ShiftRequirementDto> getRequirements(
             @PathVariable String hospitalId,
@@ -43,7 +57,12 @@ public class SchedulingController {
         return schedulingService.getRequirementsForHospital(hospitalId, startDate, endDate);
     }
 
-    /** Borra una demanda de turno. */
+    /**
+     * Borra una demanda de turno.
+     * Solo HOSPITAL_ADMIN o ROOT.
+     */
+    @Operation(summary = "Eliminar demanda de turno")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @DeleteMapping("/api/hospitals/{hospitalId}/shift-requirements/{requirementId}")
     public ResponseEntity<Void> deleteRequirement(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -54,7 +73,12 @@ public class SchedulingController {
         return ResponseEntity.noContent().build();
     }
 
-    /** Lanza la autoasignación para un rango de fechas. */
+    /**
+     * Lanza la autoasignacion para un rango de fechas.
+     * Solo HOSPITAL_ADMIN o ROOT.
+     */
+    @Operation(summary = "Autoasignacion de turnos", description = "Asigna automaticamente turnos a los trabajadores segun las demandas registradas.")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @PostMapping("/api/hospitals/{hospitalId}/shifts/auto-assign")
     public List<ShiftAssignmentDto> autoAssign(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -65,7 +89,12 @@ public class SchedulingController {
                 hospitalId, actor.getId(), request.getStartDate(), request.getEndDate());
     }
 
-    /** Crea una asignación manual (turno, día libre, vacaciones, festivo). */
+    /**
+     * Crea una asignacion manual (turno, dia libre, vacaciones, festivo).
+     * Solo HOSPITAL_ADMIN o ROOT.
+     */
+    @Operation(summary = "Asignacion manual de turno")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @PostMapping("/api/hospitals/{hospitalId}/shifts/manual")
     public ShiftAssignmentDto manualAssign(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -75,7 +104,11 @@ public class SchedulingController {
         return schedulingService.manualAssign(hospitalId, actor.getId(), request);
     }
 
-    /** Lista las asignaciones activas del hospital (con filtros opcionales de fecha). */
+    /**
+     * Lista las asignaciones activas del hospital (con filtros opcionales de fecha).
+     */
+    @Operation(summary = "Listar asignaciones del hospital")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/api/hospitals/{hospitalId}/shifts")
     public List<ShiftAssignmentDto> getAssignments(
             @PathVariable String hospitalId,
@@ -84,7 +117,12 @@ public class SchedulingController {
         return schedulingService.getAssignmentsForHospital(hospitalId, startDate, endDate);
     }
 
-    /** Cancela una asignación concreta. */
+    /**
+     * Cancela una asignacion concreta.
+     * Solo HOSPITAL_ADMIN o ROOT.
+     */
+    @Operation(summary = "Cancelar asignacion de turno")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @DeleteMapping("/api/hospitals/{hospitalId}/shifts/{shiftId}")
     public ResponseEntity<Void> cancelAssignment(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -95,7 +133,11 @@ public class SchedulingController {
         return ResponseEntity.noContent().build();
     }
 
-    /** Devuelve los turnos del usuario autenticado. */
+    /**
+     * Devuelve los turnos del usuario autenticado.
+     */
+    @Operation(summary = "Mis turnos", description = "Devuelve las asignaciones de turno del usuario autenticado.")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/api/users/me/shifts")
     public List<ShiftAssignmentDto> getMyShifts(
             @RequestHeader(name = "Authorization", required = false) String authorization) {

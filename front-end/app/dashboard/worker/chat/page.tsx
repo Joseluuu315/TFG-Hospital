@@ -40,6 +40,7 @@ export default function WorkerChatPage() {
   const [showInfoSheet, setShowInfoSheet] = useState(false);
   const [error, setError] = useState('');
   const [isLive, setIsLive] = useState(false);
+  const [mobileView, setMobileView] = useState<'sidebar' | 'window'>('sidebar');
 
   const refreshChats = useCallback(async () => {
     const [chatResponse, usersResponse] = await Promise.all([
@@ -176,11 +177,17 @@ export default function WorkerChatPage() {
       const chat = response.data;
       setChats((prev) => [chat, ...prev.filter((currentChat) => currentChat.id !== chat.id)]);
       setSelectedChat(chat);
+      setMobileView('window');
       setMessages([]);
       setShowNewChatDialog(false);
     } catch (err) {
       console.error('Error creando chat privado', err);
     }
+  };
+
+  const handleSelectChat = (chat: Chat) => {
+    setSelectedChat(chat);
+    setMobileView('window');
   };
 
   const unreadCount = chats.filter((chat) => chat.unreadCount > 0).length;
@@ -241,12 +248,13 @@ export default function WorkerChatPage() {
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
-            <div className="max-h-96 w-full shrink-0 overflow-hidden border-b border-slate-100 lg:max-h-none lg:w-[23rem] lg:border-b-0 lg:border-r">
+          <div className="flex min-h-0 flex-1 overflow-hidden lg:flex-row">
+            {/* Sidebar: oculto en móvil cuando se ve la ventana */}
+            <div className={`w-full shrink-0 overflow-hidden border-b border-slate-100 lg:w-[23rem] lg:border-b-0 lg:border-r lg:flex lg:flex-col ${mobileView === 'window' ? 'hidden lg:flex' : 'flex flex-col'}`}>
               <ChatSidebar
                 chats={chats}
                 selectedChatId={selectedChat?.id || null}
-                onSelectChat={setSelectedChat}
+                onSelectChat={handleSelectChat}
                 onNewChat={() => setShowNewChatDialog(true)}
                 showNewChatButton={false}
                 userRole={user?.role}
@@ -256,7 +264,20 @@ export default function WorkerChatPage() {
               />
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-50/30">
+            {/* Ventana de chat: oculta en móvil cuando se ve el sidebar */}
+            <div className={`min-h-0 flex-col overflow-hidden bg-slate-50/30 ${mobileView === 'sidebar' ? 'hidden lg:flex lg:flex-1' : 'flex flex-1'}`}>
+              {/* Botón volver — solo en móvil */}
+              {mobileView === 'window' && (
+                <div className="flex items-center gap-1 border-b border-slate-100 bg-white px-2 py-1.5 lg:hidden">
+                  <button
+                    onClick={() => setMobileView('sidebar')}
+                    className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 active:bg-slate-200"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Chats
+                  </button>
+                </div>
+              )}
               {error && (
                 <div className="flex items-center gap-2 border-b border-red-100 bg-red-50 px-4 py-2 text-sm text-red-600" role="alert">
                   <MessageCircle className="h-4 w-4 shrink-0" />

@@ -517,293 +517,203 @@ export default function WorkersPage() {
         </div>
 
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo trabajador
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Contratar trabajador</DialogTitle>
-              <DialogDescription>El alta se registrará en el hospital actual y las credenciales temporales se enviarán por correo.</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreateWorker}>
-              {renderWorkerFormFields(false)}
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={closeCreateDialog}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={isSubmitting || !!passwordError}>
-                  {isSubmitting ? <><Spinner className="mr-2" /> Creando...</> : 'Contratar'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
 
-      <Dialog open={isEditDialogOpen} onOpenChange={(open) => (open ? setIsEditDialogOpen(true) : closeEditDialog())}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Editar trabajador</DialogTitle>
-            <DialogDescription>Actualiza los datos operativos del empleado.</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleUpdateWorker}>
-            {renderWorkerFormFields(true)}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeEditDialog}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? <><Spinner className="mr-2" /> Guardando...</> : 'Guardar cambios'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isContractDialogOpen} onOpenChange={(open) => (open ? setIsContractDialogOpen(true) : closeContractDialog())}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Contrato de {getDisplayName(contractWorker)}</DialogTitle>
-            <DialogDescription>Configura tarifa por hora y reglas específicas de nómina.</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSaveContract} className="space-y-4 py-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <FieldLabel>Tarifa por hora</FieldLabel>
-                <Input type="number" step="0.01" value={contractForm.hourlyRate} onChange={(e) => setContractForm((current) => ({ ...current, hourlyRate: e.target.value }))} required />
-              </div>
-              <div className="space-y-2">
-                <FieldLabel>Horas semanales</FieldLabel>
-                <Input type="number" value={contractForm.weeklyHours} onChange={(e) => setContractForm((current) => ({ ...current, weeklyHours: e.target.value }))} required />
-              </div>
-              <div className="space-y-2">
-                <FieldLabel>Plus nocturno</FieldLabel>
-                <Input type="number" step="0.01" value={contractForm.nightBonusPct} onChange={(e) => setContractForm((current) => ({ ...current, nightBonusPct: e.target.value }))} required />
-              </div>
-              <div className="space-y-2">
-                <FieldLabel>Plus festivo</FieldLabel>
-                <Input type="number" step="0.01" value={contractForm.holidayBonusPct} onChange={(e) => setContractForm((current) => ({ ...current, holidayBonusPct: e.target.value }))} required />
-              </div>
-              <div className="space-y-2">
-                <FieldLabel>Multiplicador extra</FieldLabel>
-                <Input type="number" step="0.01" value={contractForm.overtimeMultiplier} onChange={(e) => setContractForm((current) => ({ ...current, overtimeMultiplier: e.target.value }))} required />
-              </div>
-              <div className="space-y-2">
-                <FieldLabel>Vigencia</FieldLabel>
-                <Input type="date" value={contractForm.effectiveFrom} onChange={(e) => setContractForm((current) => ({ ...current, effectiveFrom: e.target.value }))} required />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeContractDialog}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isSavingContract}>
-                {isSavingContract ? 'Guardando...' : 'Guardar contrato'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Listado de trabajadores ({filteredWorkers.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4 md:hidden">
-            {filteredWorkers.map((worker) => {
-              const isActive = !!worker.enabled;
-              const contract = contracts[String(worker.id)];
-              return (
-                <div key={worker.id} className="rounded-xl border p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-medium">
-                        {getInitials(worker)}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{getDisplayName(worker)}</p>
-                        <p className="text-xs text-muted-foreground">{worker.dni}</p>
-                      </div>
-                    </div>
-                    <Badge variant={isActive ? 'default' : 'secondary'} className={isActive ? 'bg-emerald-500/15 text-emerald-600' : ''}>
-                      {isActive ? 'Activo' : 'Inactivo'}
-                    </Badge>
-                  </div>
-
-                  <div className="mt-4 space-y-2 text-sm">
-                    <div className="flex items-start gap-2 text-muted-foreground">
-                      <Mail className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span className="break-all">{worker.email}</span>
-                    </div>
-                    {worker.phone && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Phone className="h-4 w-4 shrink-0" />
-                        <span>{worker.phone}</span>
-                      </div>
-                    )}
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {worker.department && <Badge variant="outline">{worker.department}</Badge>}
-                      {worker.jobTitle && <Badge variant="secondary">{worker.jobTitle}</Badge>}
-                    </div>
-                    <div className="rounded-lg bg-muted/50 p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Contrato</p>
-                      {contract ? (
-                        <p className="mt-1 font-medium">
-                          {formatCurrency(contract.hourlyRate)}/h · {contract.weeklyHours}h semana
-                        </p>
-                      ) : (
-                        <p className="mt-1 text-sm text-amber-600">Sin contrato activo</p>
-                      )}
-                    </div>
-                    <div className="rounded-lg bg-muted/50 p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Salario base</p>
-                      <p className="mt-1 font-medium">{formatCurrency(worker.baseSalary)}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                    <Button variant="outline" size="sm" onClick={() => openCalendar(worker.id)}>
-                      <Calendar className="mr-2 h-4 w-4" />
-                      Calendario
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleOpenContract(worker)}>
-                      <BadgeEuro className="mr-2 h-4 w-4" />
-                      Contrato
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleEditWorker(worker)}>
-                      <Edit className="mr-2 h-4 w-4" />
-                      Editar
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => toggleWorkerStatus(worker)}>
-                      {isActive ? 'Dar de baja' : 'Reactivar'}
-                    </Button>
-                    <Button variant="destructive" size="sm" className="sm:col-span-2" onClick={() => handleDeleteWorker(worker)}>
-                      <Delete className="mr-2 h-4 w-4" />
-                      Borrar trabajador
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="hidden overflow-x-auto md:block">
-            <Table className="min-w-[980px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Empleado</TableHead>
-                  <TableHead>Contacto</TableHead>
-                  <TableHead>Departamento</TableHead>
-                  <TableHead>Cargo</TableHead>
-                  <TableHead>Salario</TableHead>
-                  <TableHead>Contrato</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="w-12"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Listado de trabajadores ({filteredWorkers.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4 md:hidden">
                 {filteredWorkers.map((worker) => {
                   const isActive = !!worker.enabled;
                   const contract = contracts[String(worker.id)];
                   return (
-                    <TableRow key={worker.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-medium">
+                    <div key={worker.id} className="rounded-xl border p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-medium">
                             {getInitials(worker)}
                           </div>
-                          <div>
-                            <p className="font-medium">{getDisplayName(worker)}</p>
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{getDisplayName(worker)}</p>
                             <p className="text-xs text-muted-foreground">{worker.dni}</p>
                           </div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-sm">
-                            <Mail className="h-3 w-3 text-muted-foreground" />
-                            {worker.email}
-                          </div>
-                          {worker.phone && (
-                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                              <Phone className="h-3 w-3" />
-                              {worker.phone}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>{worker.department}</TableCell>
-                      <TableCell>{worker.jobTitle}</TableCell>
-                      <TableCell>{formatCurrency(worker.baseSalary)}</TableCell>
-                      <TableCell>
-                        {contract ? (
-                          <div className="text-sm">
-                            <p className="font-medium">{formatCurrency(contract.hourlyRate)}/h</p>
-                            <p className="text-muted-foreground">{contract.weeklyHours}h semana</p>
-                          </div>
-                        ) : (
-                          <Badge variant="secondary">Sin contrato</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
                         <Badge variant={isActive ? 'default' : 'secondary'} className={isActive ? 'bg-emerald-500/15 text-emerald-600' : ''}>
                           {isActive ? 'Activo' : 'Inactivo'}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openCalendar(worker.id)}>
-                              <Calendar className="mr-2 h-4 w-4" />
-                              Ver calendario
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleOpenContract(worker)}>
-                              <BadgeEuro className="mr-2 h-4 w-4" />
-                              Gestionar contrato
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleEditWorker(worker)}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDeleteWorker(worker)}>
-                            <Delete className="mr-2 h-4 w-4" />
-                              Borrar
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => toggleWorkerStatus(worker)}>
-                              {isActive ? 'Dar de baja' : 'Reactivar'}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
+                      </div>
+
+                      <div className="mt-4 space-y-2 text-sm">
+                        <div className="flex items-start gap-2 text-muted-foreground">
+                          <Mail className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span className="break-all">{worker.email}</span>
+                        </div>
+                        {worker.phone && (
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Phone className="h-4 w-4 shrink-0" />
+                            <span>{worker.phone}</span>
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {worker.department && <Badge variant="outline">{worker.department}</Badge>}
+                          {worker.jobTitle && <Badge variant="secondary">{worker.jobTitle}</Badge>}
+                        </div>
+                        <div className="rounded-lg bg-muted/50 p-3">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Contrato</p>
+                          {contract ? (
+                            <p className="mt-1 font-medium">
+                              {formatCurrency(contract.hourlyRate)}/h · {contract.weeklyHours}h semana
+                            </p>
+                          ) : (
+                            <p className="mt-1 text-sm text-amber-600">Sin contrato activo</p>
+                          )}
+                        </div>
+                        <div className="rounded-lg bg-muted/50 p-3">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Salario base</p>
+                          <p className="mt-1 font-medium">{formatCurrency(worker.baseSalary)}</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                        <Button variant="outline" size="sm" onClick={() => openCalendar(worker.id)}>
+                          <Calendar className="mr-2 h-4 w-4" />
+                          Calendario
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleOpenContract(worker)}>
+                          <BadgeEuro className="mr-2 h-4 w-4" />
+                          Contrato
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleEditWorker(worker)}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          Editar
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => toggleWorkerStatus(worker)}>
+                          {isActive ? 'Dar de baja' : 'Reactivar'}
+                        </Button>
+                        <Button variant="destructive" size="sm" className="sm:col-span-2" onClick={() => handleDeleteWorker(worker)}>
+                          <Delete className="mr-2 h-4 w-4" />
+                          Borrar trabajador
+                        </Button>
+                      </div>
+                    </div>
                   );
                 })}
-              </TableBody>
-            </Table>
-          </div>
+              </div>
 
-          {filteredWorkers.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Users className="mb-4 h-12 w-12 text-muted-foreground/50" />
-              <h3 className="text-lg font-medium">No se encontraron trabajadores</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Cambia filtros o registra un empleado nuevo.</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </DashboardShell>
-  );
+              <div className="hidden overflow-x-auto md:block">
+                <Table className="min-w-[980px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Empleado</TableHead>
+                      <TableHead>Contacto</TableHead>
+                      <TableHead>Departamento</TableHead>
+                      <TableHead>Cargo</TableHead>
+                      <TableHead>Salario</TableHead>
+                      <TableHead>Contrato</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead className="w-12"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredWorkers.map((worker) => {
+                      const isActive = !!worker.enabled;
+                      const contract = contracts[String(worker.id)];
+                      return (
+                        <TableRow key={worker.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-medium">
+                                {getInitials(worker)}
+                              </div>
+                              <div>
+                                <p className="font-medium">{getDisplayName(worker)}</p>
+                                <p className="text-xs text-muted-foreground">{worker.dni}</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1 text-sm">
+                                <Mail className="h-3 w-3 text-muted-foreground" />
+                                {worker.email}
+                              </div>
+                              {worker.phone && (
+                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                  <Phone className="h-3 w-3" />
+                                  {worker.phone}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>{worker.department}</TableCell>
+                          <TableCell>{worker.jobTitle}</TableCell>
+                          <TableCell>{formatCurrency(worker.baseSalary)}</TableCell>
+                          <TableCell>
+                            {contract ? (
+                              <div className="text-sm">
+                                <p className="font-medium">{formatCurrency(contract.hourlyRate)}/h</p>
+                                <p className="text-muted-foreground">{contract.weeklyHours}h semana</p>
+                              </div>
+                            ) : (
+                              <Badge variant="secondary">Sin contrato</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={isActive ? 'default' : 'secondary'} className={isActive ? 'bg-emerald-500/15 text-emerald-600' : ''}>
+                              {isActive ? 'Activo' : 'Inactivo'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openCalendar(worker.id)}>
+                                  <Calendar className="mr-2 h-4 w-4" />
+                                  Ver calendario
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleOpenContract(worker)}>
+                                  <BadgeEuro className="mr-2 h-4 w-4" />
+                                  Gestionar contrato
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleEditWorker(worker)}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDeleteWorker(worker)}>
+                                  <Delete className="mr-2 h-4 w-4" />
+                                  Borrar
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => toggleWorkerStatus(worker)}>
+                                  {isActive ? 'Dar de baja' : 'Reactivar'}
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {filteredWorkers.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Users className="mb-4 h-12 w-12 text-muted-foreground/50" />
+                  <h3 className="text-lg font-medium">No se encontraron trabajadores</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">Cambia filtros o registra un empleado nuevo.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </DashboardShell>
+        );
 }

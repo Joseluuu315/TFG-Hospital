@@ -7,9 +7,12 @@ import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.entity.enums.HospitalStatus;
 import com.joseluu.hospital.service.AuthService;
 import com.joseluu.hospital.service.HospitalService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,6 +20,7 @@ import java.util.List;
 /**
  * Endpoints de administracion de hospitales.
  */
+@Tag(name = "Hospitales", description = "Gestion de hospitales del sistema")
 @RestController
 @RequestMapping("/api/hospitals")
 public class HospitalsController {
@@ -30,7 +34,10 @@ public class HospitalsController {
 
     /**
      * Lista todos los hospitales registrados.
+     * Accesible por cualquier usuario autenticado.
      */
+    @Operation(summary = "Listar hospitales")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping
     public List<HospitalDto> getAll() {
         return hospitalService.getAll();
@@ -39,6 +46,8 @@ public class HospitalsController {
     /**
      * Obtiene un hospital por su identificador.
      */
+    @Operation(summary = "Obtener hospital por id")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/{id}")
     public HospitalDto getById(@PathVariable String id) {
         return hospitalService.getById(id);
@@ -46,7 +55,10 @@ public class HospitalsController {
 
     /**
      * Crea un hospital con el administrador asignado.
+     * Solo ROOT puede crear hospitales.
      */
+    @Operation(summary = "Crear hospital", description = "Registra un nuevo hospital en el sistema. Solo ROOT.")
+    @PreAuthorize("hasRole('ROOT')")
     @PostMapping
     public HospitalDto create(@Valid @RequestBody CreateHospitalRequestDto request) {
         return hospitalService.create(request);
@@ -54,7 +66,10 @@ public class HospitalsController {
 
     /**
      * Actualiza datos generales de un hospital.
+     * Solo HOSPITAL_ADMIN o ROOT.
      */
+    @Operation(summary = "Actualizar hospital")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @PutMapping("/{id}")
     public HospitalDto update(@PathVariable String id, @RequestBody HospitalDto payload) {
         return hospitalService.update(id, payload);
@@ -62,7 +77,10 @@ public class HospitalsController {
 
     /**
      * Cambia el estado (activo, suspendido, etc.) de un hospital.
+     * Solo ROOT puede suspender o reactivar hospitales.
      */
+    @Operation(summary = "Cambiar estado del hospital", description = "Cambia el estado operativo del hospital. Solo ROOT.")
+    @PreAuthorize("hasRole('ROOT')")
     @PatchMapping("/{id}/status")
     public HospitalDto updateStatus(@PathVariable String id, @Valid @RequestBody StatusUpdate request) {
         return hospitalService.updateStatus(id, request.getStatus());
@@ -70,7 +88,10 @@ public class HospitalsController {
 
     /**
      * Elimina un hospital y los datos asociados.
+     * Solo ROOT puede eliminar hospitales.
      */
+    @Operation(summary = "Eliminar hospital", description = "Elimina un hospital y todos sus datos. Solo ROOT.")
+    @PreAuthorize("hasRole('ROOT')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable String id) {
         hospitalService.delete(id);
@@ -79,7 +100,10 @@ public class HospitalsController {
 
     /**
      * Agrega un anuncio a un hospital.
+     * HOSPITAL_ADMIN o ROOT pueden publicar anuncios.
      */
+    @Operation(summary = "Publicar anuncio")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @PostMapping("/{id}/announcements")
     public AnnouncementDto addAnnouncement(@RequestHeader(name = "Authorization", required = false) String authorization,
                                            @PathVariable String id,
@@ -91,6 +115,8 @@ public class HospitalsController {
     /**
      * Actualiza un anuncio de un hospital.
      */
+    @Operation(summary = "Actualizar anuncio")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @PutMapping("/{id}/announcements/{announcementId}")
     public AnnouncementDto updateAnnouncement(@PathVariable String id,
                                               @PathVariable String announcementId,
@@ -101,6 +127,8 @@ public class HospitalsController {
     /**
      * Elimina un anuncio de un hospital.
      */
+    @Operation(summary = "Eliminar anuncio")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @DeleteMapping("/{id}/announcements/{announcementId}")
     public ResponseEntity<Void> deleteAnnouncement(@PathVariable String id,
                                                    @PathVariable String announcementId) {

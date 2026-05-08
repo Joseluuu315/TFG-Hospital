@@ -191,7 +191,7 @@ export function NewChatDialog({
                   {activeTab === 'private' && (
                       <>
                         <SearchBox id={privateSearchId} value={searchQuery} onChange={setSearchQuery} resultsId={resultsId} />
-                        <ScrollArea className="h-64">
+                        <ScrollArea className="max-h-[40dvh] min-h-[8rem]">
                           <div className="space-y-0.5 pr-1">
                             {filteredWorkers.length > 0
                                 ? filteredWorkers.map((w) => (
@@ -229,7 +229,7 @@ export function NewChatDialog({
                           </Label>
                           <SearchBox id={`group-search-${groupNameId}`} value={searchQuery} onChange={setSearchQuery} resultsId={resultsId} />
                         </div>
-                        <ScrollArea className="h-44">
+                        <ScrollArea className="max-h-[35dvh] min-h-[6rem]">
                           <div className="space-y-0.5 pr-1">
                             {filteredWorkers.length > 0
                                 ? filteredWorkers.map((w) => (
@@ -260,7 +260,7 @@ export function NewChatDialog({
           ) : (
               <div className="px-5 py-4 space-y-3">
                 <SearchBox id={privateSearchId} value={searchQuery} onChange={setSearchQuery} resultsId={resultsId} />
-                <ScrollArea className="h-64">
+                <ScrollArea className="max-h-[40dvh] min-h-[8rem]">
                   <div className="space-y-0.5 pr-1">
                     {filteredWorkers.length > 0
                         ? filteredWorkers.map((w) => (

@@ -91,21 +91,21 @@ export function Header({ title, description }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto flex min-h-16 w-full max-w-[1600px] flex-wrap items-start justify-between gap-3 px-4 py-3 sm:px-6 md:flex-nowrap md:items-center lg:px-8">
-        <div className="flex min-w-0 items-start gap-3 md:items-center">
+      <div className="mx-auto flex min-h-14 w-full max-w-[1600px] items-center justify-between gap-2 px-4 py-2 sm:min-h-16 sm:px-6 sm:py-3 md:gap-3 lg:px-8">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           <MobileSidebar />
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold sm:text-xl">{title}</h1>
+            <h1 className="truncate text-base font-semibold leading-tight sm:text-xl">{title}</h1>
             {description && (
-              <p className="mt-0.5 line-clamp-2 max-w-2xl text-xs text-muted-foreground sm:text-sm">
+              <p className="mt-0.5 hidden line-clamp-1 max-w-2xl text-xs text-muted-foreground sm:block sm:text-sm">
                 {description}
               </p>
             )}
           </div>
         </div>
 
-        <div className="flex w-full items-center justify-end gap-2 sm:gap-3 md:w-auto md:flex-nowrap">
-          <InputGroup className="hidden lg:flex w-64 xl:w-72">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <InputGroup className="hidden xl:flex w-64 2xl:w-72">
             <InputGroupAddon>
               <Search className="h-4 w-4" />
             </InputGroupAddon>
@@ -180,7 +180,7 @@ export function Header({ title, description }: HeaderProps) {
             </Button>
           )}
 
-          <div className="hidden lg:flex min-w-0 items-center gap-2 text-sm">
+          <div className="hidden xl:flex min-w-0 items-center gap-2 text-sm">
             <span className="text-muted-foreground">Bienvenido,</span>
             <span className="truncate font-medium">{fullName || 'Usuario'}</span>
           </div>
