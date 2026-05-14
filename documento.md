@@ -1,773 +1,431 @@
-# Documento tecnico del proyecto TFG-Hospital
+# Documento tecnico completo - TFG-Hospital
 
-## 1. Resumen del proyecto
+## Indice
 
-`TFG-Hospital` es una aplicacion web full stack para la gestion de hospitales con enfoque operativo. No se limita a usuarios o fichas administrativas: incluye tambien reglas de turnicidad, demandas por departamento, autoasignacion, control de ausencias, calculo de nomina y trazabilidad.
+1. Datos del Proyecto
+2. Resumen
+   2.1. Resumen
+3. Introduccion y Justificacion
+   3.1. Introduccion
+   3.2. Justificacion del Proyecto
+4. Objetivos
+   4.1. Objetivo General
+   4.2. Objetivos Especificos
+5. Analisis del Problema y Requisitos
+   5.1. Analisis del Problema
+   5.2. Requisitos Funcionales (RF)
+   5.3. Requisitos No Funcionales (RNF)
+6. Diseno Tecnico
+   6.1. Arquitectura del Sistema
+   6.2. Diseno de Base de Datos
+   6.2.1. Entidades y Relaciones
+   6.3. Diseno de Interfaz de Usuario (UI)
+7. Tecnologias Utilizadas
+8. Desarrollo e Implementacion
+   8.1. Estructura de Modulos
+   8.2. Modulos principales del sistema
+9. Seguridad y Validaciones
+   9.1. Seguridad y Control de Acceso
+   9.2. Validaciones
+10. Persistencia y Entorno de Ejecucion
+    10.1. Persistencia
+    10.2. Entorno de Ejecucion
+11. Pruebas y Limitaciones
+    11.1. Pruebas Realizadas
+    11.2. Limitaciones del Proyecto
+12. Conclusiones y Lineas de Mejora
+    12.1. Conclusiones
+    12.2. Lineas de Mejora Futuras
+13. Referencias
+    13.1. Bibliografia
 
-La solucion esta separada en dos aplicaciones:
+## 1. Datos del Proyecto
 
-- backend REST con Spring Boot y MongoDB
-- frontend web con Next.js, React y TypeScript
+| Campo | Valor |
+| --- | --- |
+| Nombre del proyecto | TFG-Hospital |
+| Tipo de proyecto | Aplicacion web full stack para la gestion operativa de hospitales |
+| Repositorio GitHub | <https://github.com/Joseluuu315/TFG-Hospital> |
+| Backend | Java 17, Spring Boot 4.0.2, MongoDB |
+| Frontend | Next.js 16.1.6, React 19.2.4, TypeScript |
+| Base de datos | MongoDB |
+| Roles principales | ROOT, HOSPITAL_ADMIN, WORKER |
+| Entorno local | Backend en `http://localhost:8080` y frontend en `http://localhost:3000` |
+| Despliegue previsto | VPS con backend Spring Boot, frontend Next.js y configuracion mediante variables de entorno |
 
-El sistema trabaja con tres roles:
+## 2. Resumen
 
-- `ROOT`
-- `HOSPITAL_ADMIN`
-- `WORKER`
+### 2.1. Resumen
 
-## 2. Objetivo funcional
+`TFG-Hospital` es una aplicacion web orientada a centralizar la gestion interna de hospitales. El proyecto combina una API REST desarrollada con Spring Boot y un frontend moderno construido con Next.js, React y TypeScript. La informacion se almacena en MongoDB y se organiza mediante documentos por dominio.
 
-El objetivo del proyecto es centralizar en una sola plataforma varios procesos internos del hospital:
+El sistema no se limita a una gestion basica de usuarios. Incluye administracion de hospitales, trabajadores, calendarios, ausencias, nominas, turnos, contratos, chat interno, grupos de trabajo, notificaciones, auditoria, seguridad con tokens persistidos y documentacion de API mediante Swagger/OpenAPI.
 
-- administracion de hospitales
-- gestion de personal
-- calendario y ausencias
-- operaciones de turnos
-- nomina avanzada
-- comunicacion interna
-- notificaciones
-- auditoria
+La aplicacion esta pensada para tres perfiles. El usuario `ROOT` administra la plataforma y los hospitales registrados. El usuario `HOSPITAL_ADMIN` gestiona la operativa de un hospital concreto. El usuario `WORKER` consulta su calendario, solicita ausencias, revisa nominas y participa en la comunicacion interna.
 
-## 3. Arquitectura general
+## 3. Introduccion y Justificacion
 
-## 3.1 Backend
+### 3.1. Introduccion
 
-Ruta principal:
+La gestion hospitalaria requiere coordinar informacion administrativa, laboral y operativa de forma continua. En un hospital se gestionan trabajadores, turnos, ausencias, nominas, comunicaciones internas, incidencias y decisiones de administracion. Si estos procesos se reparten entre hojas de calculo, correos y herramientas aisladas, aumenta el riesgo de errores, duplicidades y falta de trazabilidad.
 
-- `src/main/java/com/joseluu/hospital`
+`TFG-Hospital` nace como una solucion academica pero realista para integrar estos procesos en una sola plataforma. La aplicacion plantea una arquitectura separada entre backend y frontend, con una API centralizada y una interfaz organizada por paneles segun el rol del usuario.
 
-Estructura:
+### 3.2. Justificacion del Proyecto
 
-- `controller`: endpoints HTTP
-- `service`: reglas de negocio y procesos
-- `repository`: acceso a MongoDB
-- `entity`: documentos persistidos
-- `dto`: contratos de entrada y salida
-- `exception` y `error`: manejo de errores
+El proyecto se justifica por la necesidad de digitalizar procesos internos que suelen ser repetitivos y sensibles. La planificacion de turnos, el control de ausencias y el calculo de nominas requieren reglas claras, datos consistentes y capacidad de consulta.
 
-Controladores principales:
+El sistema aporta valor porque:
 
-- `AuthController`
-- `HospitalsController`
-- `UsersController`
-- `LeaveRequestsController`
-- `PayrollsController`
-- `AdvancedPayrollController`
-- `HospitalSettingsController`
-- `ShiftTypesController`
-- `SchedulingController`
-- `WorkerContractsController`
-- `ChatController`
-- `WorkGroupsController`
-- `NotificationsController`
-- `AuditLogsController`
-- `AdminStatsController`
+- centraliza la informacion del hospital y sus trabajadores;
+- facilita la gestion de ausencias, contratos y nominas;
+- permite configurar reglas operativas de turnos;
+- ayuda a repartir turnos mediante autoasignacion;
+- mejora la comunicacion interna con chats y grupos;
+- incorpora trazabilidad mediante logs de auditoria;
+- esta preparado para despliegue en VPS y mantenimiento desde GitHub.
 
-Servicios clave:
+## 4. Objetivos
 
-- `AuthService`
-- `HospitalService`
-- `UserService`
-- `SchedulingService`
-- `AdvancedPayrollService`
-- `PayrollService`
-- `NotificationService`
-- `AuditLogService`
-- `ChatService`
-- `WorkGroupService`
-- `DataSeeder`
+### 4.1. Objetivo General
 
-## 3.2 Frontend
+Desarrollar una aplicacion web full stack para gestionar la operativa de hospitales desde una plataforma centralizada, segura y extensible, separando claramente la API REST del backend y la interfaz de usuario del frontend.
 
-Ruta principal:
+### 4.2. Objetivos Especificos
 
-- `front-end`
+- implementar autenticacion con tokens Bearer y refresh token;
+- persistir sesiones de usuario en MongoDB mediante hashes;
+- proteger contrasenas con BCrypt;
+- ofrecer recuperacion de contrasena mediante token temporal y correo;
+- gestionar hospitales, estados y anuncios internos;
+- gestionar trabajadores, perfiles, calendarios y contratos;
+- registrar y revisar solicitudes de ausencia;
+- definir configuracion operativa por hospital;
+- crear tipos de turno, demandas y asignaciones;
+- calcular nominas basadas en contratos, turnos, ausencias y ajustes;
+- permitir chats, grupos de trabajo y notificaciones;
+- registrar acciones sensibles mediante auditoria;
+- documentar endpoints con Swagger/OpenAPI;
+- preparar el proyecto para repositorio remoto y despliegue en VPS.
 
-Estructura relevante:
+## 5. Analisis del Problema y Requisitos
 
-- `app/`: rutas del frontend
-- `components/`: componentes reutilizables y UI
-- `contexts/`: estado compartido
-- `lib/`: cliente API, tipos, utilidades
+### 5.1. Analisis del Problema
 
-Paneles:
+El problema principal es la dispersion de informacion en la gestion diaria de un hospital. Un administrador necesita conocer trabajadores disponibles, ausencias, demandas de cobertura, turnos asignados, nominas generadas y comunicaciones internas. Al mismo tiempo, cada trabajador necesita acceder a su informacion personal, calendario, nominas y solicitudes.
 
-- `dashboard/root`
-- `dashboard/admin`
-- `dashboard/worker`
-- `dashboard/settings`
+La solucion propuesta divide el sistema en dominios funcionales. Cada modulo resuelve una parte del problema y se conecta con el resto mediante identificadores compartidos. Por ejemplo, una nomina se calcula a partir del trabajador, su contrato, sus turnos y sus ausencias; una demanda de turno se convierte en asignaciones; una accion administrativa puede crear una notificacion y un registro de auditoria.
 
-## 3.3 Flujo de integracion
+### 5.2. Requisitos Funcionales (RF)
 
-El frontend consume el backend a traves de `/api/*`. Next aplica un rewrite hacia el backend, por lo que desde la UI se trabaja de forma transparente con la API REST.
+- RF1. El sistema debe permitir iniciar sesion con email y contrasena.
+- RF2. El sistema debe generar `accessToken` y `refreshToken`.
+- RF3. El sistema debe permitir cerrar sesion invalidando tokens.
+- RF4. El sistema debe permitir recuperar contrasena mediante correo y token temporal.
+- RF5. El usuario `ROOT` debe poder gestionar hospitales y consultar estadisticas globales.
+- RF6. El usuario `HOSPITAL_ADMIN` debe poder gestionar trabajadores de su hospital.
+- RF7. El usuario `WORKER` debe poder consultar y modificar parte de su perfil.
+- RF8. El sistema debe permitir crear, revisar y listar solicitudes de ausencia.
+- RF9. El sistema debe permitir registrar eventos de calendario.
+- RF10. El sistema debe permitir configurar reglas operativas del hospital.
+- RF11. El sistema debe permitir crear tipos de turno.
+- RF12. El sistema debe permitir crear demandas de cobertura por fecha y departamento.
+- RF13. El sistema debe permitir asignar turnos manualmente.
+- RF14. El sistema debe permitir autoasignar turnos segun reglas de negocio.
+- RF15. El sistema debe permitir crear y consultar contratos laborales.
+- RF16. El sistema debe permitir generar nominas y descargar PDF.
+- RF17. El sistema debe permitir generar nomina avanzada con lineas de detalle.
+- RF18. El sistema debe permitir crear chats, mensajes y grupos de trabajo.
+- RF19. El sistema debe emitir notificaciones funcionales.
+- RF20. El sistema debe guardar logs de auditoria.
+- RF21. El sistema debe exponer documentacion de API mediante Swagger UI.
 
-## 4. Tecnologias utilizadas
+### 5.3. Requisitos No Funcionales (RNF)
+
+- RNF1. El backend debe exponer una API REST clara y organizada.
+- RNF2. El frontend debe ofrecer una interfaz web responsive.
+- RNF3. El codigo debe mantener separacion por capas.
+- RNF4. La configuracion sensible debe mantenerse fuera del repositorio.
+- RNF5. El sistema debe permitir despliegue en VPS usando variables de entorno.
+- RNF6. Las contrasenas no deben almacenarse en texto plano.
+- RNF7. Los tokens persistidos no deben guardarse en claro, sino hasheados.
+- RNF8. El proyecto debe poder versionarse y mantenerse desde GitHub.
+- RNF9. La base de datos debe soportar un modelo flexible de documentos.
+- RNF10. La aplicacion debe poder ejecutarse localmente para desarrollo y pruebas.
+
+## 6. Diseno Tecnico
+
+### 6.1. Arquitectura del Sistema
+
+La arquitectura se divide en dos aplicaciones principales:
+
+- backend REST con Spring Boot;
+- frontend web con Next.js.
+
+El backend se encuentra en `src/main/java/com/joseluu/hospital` y sigue una organizacion por capas:
+
+- `controller`: recibe peticiones HTTP y expone endpoints;
+- `service`: concentra la logica de negocio;
+- `repository`: accede a MongoDB con Spring Data;
+- `entity`: define documentos persistidos;
+- `dto`: define contratos de entrada y salida;
+- `security`: configura autenticacion y filtros Bearer;
+- `exception` y `error`: centralizan errores de API;
+- `config`: agrupa configuraciones como OpenAPI.
+
+El frontend se encuentra en `front-end` y usa App Router de Next.js. Su estructura principal es:
+
+- `app/`: rutas y paginas;
+- `components/`: componentes de UI y componentes de dominio;
+- `contexts/`: estado global, especialmente autenticacion;
+- `lib/`: cliente HTTP, tipos y utilidades.
+
+La integracion entre frontend y backend se hace mediante llamadas a `/api/*`. En desarrollo, `next.config.mjs` reescribe estas rutas hacia `http://localhost:8080/api/*`.
+
+### 6.2. Diseno de Base de Datos
+
+La persistencia usa MongoDB. Cada area funcional tiene colecciones propias. Las colecciones principales son:
+
+- `users`;
+- `auth_sessions`;
+- `hospitals`;
+- `leave_requests`;
+- `hospital_settings`;
+- `shift_types`;
+- `shift_requirements`;
+- `shift_assignments`;
+- `worker_contracts`;
+- `payrolls`;
+- `payroll_items`;
+- `payroll_adjustments`;
+- `chats`;
+- `chat_messages`;
+- `work_groups`;
+- `notifications`;
+- `audit_logs`.
+
+### 6.2.1. Entidades y Relaciones
+
+Aunque MongoDB no impone claves foraneas como una base relacional, el dominio mantiene relaciones logicas claras:
+
+- un hospital agrupa trabajadores, anuncios, configuracion, turnos y chats;
+- un usuario pertenece a un hospital cuando su rol lo requiere;
+- un trabajador puede tener contrato activo, ausencias, calendario, turnos y nominas;
+- una demanda de turno puede generar varias asignaciones;
+- una nomina puede tener lineas de detalle y ajustes manuales;
+- un chat contiene mensajes y puede estar ligado a un grupo;
+- una accion relevante puede generar notificacion y auditoria;
+- una sesion de autenticacion queda vinculada a un usuario mediante `auth_sessions`.
+
+### 6.3. Diseno de Interfaz de Usuario (UI)
+
+La interfaz se organiza en paneles por rol:
+
+- `/dashboard/root`: administracion global;
+- `/dashboard/admin`: administracion hospitalaria;
+- `/dashboard/worker`: area del trabajador;
+- `/dashboard/settings`: configuracion de perfil.
+
+Rutas destacadas del frontend:
+
+- `/login`;
+- `/reset-password`;
+- `/dashboard/root/hospitals`;
+- `/dashboard/root/stats`;
+- `/dashboard/root/support`;
+- `/dashboard/admin/workers`;
+- `/dashboard/admin/announcements`;
+- `/dashboard/admin/leave-requests`;
+- `/dashboard/admin/payrolls`;
+- `/dashboard/admin/operations`;
+- `/dashboard/admin/chat`;
+- `/dashboard/admin/audit`;
+- `/dashboard/worker/calendar`;
+- `/dashboard/worker/leave-requests`;
+- `/dashboard/worker/payrolls`;
+- `/dashboard/worker/chat`.
+
+La UI utiliza Tailwind CSS, Radix UI, componentes tipo shadcn, iconos de Lucide, tablas, formularios, dialogos, notificaciones con Sonner y componentes reutilizables para el layout del dashboard.
+
+## 7. Tecnologias Utilizadas
 
 ### Backend
 
-- Java 17
-- Spring Boot 4.0.2
-- Spring Web MVC
-- Spring Data MongoDB
-- Spring Validation
-- Spring Security
-- Actuator
-- Lombok
-- Gradle
+- Java 17.
+- Spring Boot 4.0.2.
+- Spring Web MVC.
+- Spring Data MongoDB.
+- Spring Security.
+- Spring Validation.
+- Spring Actuator.
+- Springdoc OpenAPI / Swagger UI.
+- Lombok.
+- Gradle.
+- JUnit 5, Mockito y MockMvc para pruebas.
 
 ### Frontend
 
-- Next.js 16.1.6
-- React 19.2.4
-- TypeScript 5.7.3
-- Tailwind CSS 4
-- Radix UI
-- Axios
-- SWR
-- React Hook Form
-- Zod
-- Sonner
-- Lucide React
+- Next.js 16.1.6.
+- React 19.2.4.
+- TypeScript 5.7.3.
+- Tailwind CSS 4.
+- Radix UI / shadcn UI.
+- Axios.
+- SWR.
+- React Hook Form.
+- Zod.
+- Sonner.
+- Lucide React.
+- Recharts.
 
-### Base de datos
+### Infraestructura y herramientas
 
-- MongoDB
+- MongoDB.
+- Git y GitHub.
+- VPS para despliegue.
+- Variables de entorno y `config/application-secrets.properties` para secretos.
+- Swagger UI en `/swagger-ui.html`.
+- Health check en `/actuator/health`.
 
-## 5. Roles y permisos
+## 8. Desarrollo e Implementacion
 
-## 5.1 ROOT
+### 8.1. Estructura de Modulos
 
-Puede:
+Los modulos principales del proyecto son:
 
-- consultar metricas globales
-- gestionar hospitales
-- acceder al chat de soporte
+- autenticacion y recuperacion de contrasena;
+- administracion global y hospitales;
+- usuarios, trabajadores y perfil;
+- calendario y ausencias;
+- configuracion hospitalaria;
+- turnos y operaciones;
+- contratos laborales;
+- nomina basica y avanzada;
+- chat, grupos y soporte;
+- notificaciones;
+- auditoria;
+- documentacion OpenAPI.
 
-## 5.2 HOSPITAL_ADMIN
+### 8.2. Modulos principales del sistema
 
-Puede:
+#### Autenticacion y sesion
 
-- gestionar trabajadores
-- gestionar contratos
-- configurar reglas del hospital
-- crear tipos de turno
-- registrar demandas
-- ejecutar autoasignacion
-- revisar ausencias
-- generar nominas
-- gestionar chats y grupos
-- consultar auditoria
+`AuthService` valida credenciales, genera tokens y crea sesiones persistidas en `auth_sessions`. Los tokens se entregan al cliente en claro, pero se guardan en MongoDB como hash SHA-256. El access token tiene caducidad configurable y el refresh token permite renovar sesion. El logout elimina la sesion asociada al token.
 
-## 5.3 WORKER
+El sistema tambien permite recuperar contrasena. Para ello genera un token temporal, guarda su hash en el usuario y envia un enlace de recuperacion con la URL base definida en `FRONTEND_BASE_URL`.
 
-Puede:
+#### Hospitales y administracion global
 
-- ver su calendario
-- solicitar ausencias
-- ver sus nominas
-- descargar PDF
-- participar en chats
-- editar su perfil
+`HospitalsController` y `HospitalService` permiten crear, listar, editar, suspender y eliminar hospitales. Tambien gestionan anuncios internos. `AdminStatsController` ofrece metricas globales para el perfil `ROOT`.
 
-## 6. Modulos funcionales
+#### Usuarios y trabajadores
 
-## 6.1 Autenticacion y sesion
+`UsersController` permite listar usuarios, obtener detalle, crear trabajadores, editar datos y gestionar calendario. Los trabajadores incluyen datos personales, hospital asociado, departamento, puesto, salario base, estado de cuenta y eventos de calendario.
 
-La autenticacion del backend esta integrada con Spring Security y funciona con tokens Bearer persistidos en MongoDB. El login valida credenciales contra la coleccion de usuarios y genera:
+#### Ausencias
 
-- `accessToken`
-- `refreshToken`
+`LeaveRequestsController` y `LeaveRequestService` gestionan solicitudes de ausencia. Un trabajador puede solicitarlas y un administrador puede revisarlas. Las ausencias pueden ser pagadas o no pagadas, lo que afecta a la nomina avanzada.
 
-Los tokens no se guardan en claro: se almacena su hash SHA-256 en la coleccion `auth_sessions`, junto con el usuario asociado y las fechas de caducidad. Esto permite que las sesiones sobrevivan a un reinicio del backend y que el logout o el cambio de contrasena invaliden sesiones persistidas.
+#### Operaciones y turnos
 
-La proteccion HTTP se realiza con:
+`SchedulingService` gestiona demandas de turno, asignaciones manuales y autoasignacion. El algoritmo tiene en cuenta solapes, descanso minimo, horas semanales, departamento y una puntuacion de reparto de carga basada en horas, fines de semana y noches.
 
-- `SecurityConfig`, que define una API stateless, rutas publicas de autenticacion y autenticacion obligatoria para el resto de endpoints
-- `BearerTokenAuthenticationFilter`, que lee `Authorization: Bearer ...`, valida el token persistido y carga el usuario autenticado en el `SecurityContext`
-- `AuthenticatedUserPrincipal`, que expone el usuario y su rol como autoridad `ROLE_*`
+#### Configuracion hospitalaria
 
-Las contrasenas se guardan con BCrypt. Las contrasenas historicas en texto plano se migran automaticamente a BCrypt al arrancar la aplicacion mediante `DataSeeder`, y el login ya no compara contrasenas en claro.
+`HospitalSettingsService` define reglas por hospital: horas semanales maximas, descanso minimo, dias consecutivos maximos, noches consecutivas maximas, peso de reparto, plus nocturno, plus festivo y multiplicador de horas extra.
 
-En el frontend, `auth-context.tsx` y `lib/api.ts`:
+#### Contratos y nominas
 
-- guardan el token
-- reenvian `Authorization: Bearer ...`
-- intentan refresh automatico ante `401`
+`WorkerContractService` mantiene el contrato activo de cada trabajador. `AdvancedPayrollService` genera nominas a partir del contrato, los turnos, ausencias y ajustes manuales. Las nominas se guardan en `payrolls` y sus conceptos en `payroll_items`. `PayrollService` permite descarga de PDF.
 
-## 6.2 Gestion de hospitales
+#### Chat, grupos, notificaciones y auditoria
 
-Este modulo cubre:
+El sistema soporta chats privados, chats de hospital, chats de grupo y chats de soporte. Los grupos de trabajo tienen chat asociado. Las notificaciones avisan sobre acciones relevantes y `AuditLogService` registra operaciones sensibles para trazabilidad.
 
-- listado
-- detalle
-- creacion
-- actualizacion
-- cambio de estado
-- eliminacion
-- anuncios internos
+#### Datos semilla
 
-La eliminacion del hospital arrastra limpieza de informacion asociada segun la logica del servicio.
+`DataSeeder` prepara un entorno demo si las colecciones estan vacias. Crea hospital, usuarios base, trabajadores, contratos, turnos, ausencias, nominas, chats y grupos. Las credenciales de demo son:
 
-## 6.3 Gestion de trabajadores
+- `superadmin@trassierra.com` / `admin123`;
+- `admin@hospital-reina-sofia.com` / `admin123`;
+- `trabajador1@hospital-reina-sofia.com` / `worker123`;
+- `trabajador2@hospital-reina-sofia.com` / `worker123`;
+- `trabajador3@hospital-reina-sofia.com` / `worker123`.
 
-Permite:
+## 9. Seguridad y Validaciones
 
-- crear trabajadores
-- editar datos operativos
-- activar o desactivar cuentas
-- consultar calendario
-- asociar contrato laboral
+### 9.1. Seguridad y Control de Acceso
 
-Campos habituales:
+La seguridad se basa en Spring Security con API stateless. `SecurityConfig` desactiva CSRF para la API, publica solo rutas concretas y exige autenticacion para el resto. Las rutas publicas principales son:
 
-- nombre y apellidos
-- email
-- DNI
-- telefono
-- departamento
-- puesto
-- salario base
-- hospital asociado
+- `/api/auth/login`;
+- `/api/auth/refresh`;
+- `/api/auth/forgot-password`;
+- `/api/auth/reset-password`;
+- `/actuator/health`;
+- `/v3/api-docs/**`;
+- `/swagger-ui/**`;
+- `/swagger-ui.html`.
 
-## 6.4 Calendario y ausencias
+`BearerTokenAuthenticationFilter` lee `Authorization: Bearer <token>`, valida la sesion persistida y carga el usuario autenticado en el contexto de seguridad. `AuthenticatedUserPrincipal` expone el usuario y su rol como autoridad `ROLE_*`.
 
-Cada trabajador puede tener eventos de calendario y solicitudes de ausencia.
+Las contrasenas se guardan con BCrypt mediante `PasswordService`. Los tokens de sesion y recuperacion se almacenan hasheados. Al restablecer contrasena se invalidan sesiones previas del usuario.
 
-Las ausencias soportan:
+### 9.2. Validaciones
 
-- fecha inicio y fin
-- motivo
-- tipo de ausencia
-- estado
-- comentario de revision
-- indicador de ausencia pagada o no pagada
+El proyecto usa `spring-boot-starter-validation` y DTOs con validaciones `jakarta.validation`. Ademas, los servicios aplican reglas de negocio como:
 
-Estados principales:
+- email y contrasena obligatorios en login;
+- refresh token obligatorio para renovacion;
+- pertenencia de trabajadores al hospital correspondiente;
+- contrato activo requerido para nomina avanzada;
+- control de solapes al asignar turnos;
+- respeto de descanso minimo y horas semanales en autoasignacion;
+- gestion de errores mediante excepciones propias y `GlobalExceptionHandler`.
 
-- `PENDING`
-- `APPROVED`
-- `REJECTED`
+En frontend, los formularios usan TypeScript, Zod, React Hook Form y feedback visual con Sonner para mejorar la experiencia y reducir errores de entrada.
 
-## 6.5 Operaciones y planificacion de turnos
+## 10. Persistencia y Entorno de Ejecucion
 
-Es uno de los modulos mas potentes del proyecto. Incluye:
+### 10.1. Persistencia
 
-- configuracion hospitalaria
-- tipos de turno
-- demandas por fecha y departamento
-- asignacion manual
-- autoasignacion
+MongoDB es la base de datos principal. La configuracion se define en `src/main/resources/application.properties`, pero las credenciales no deben estar en el repositorio. El proyecto esta preparado para leer:
 
-### Reglas de configuracion hospitalaria
+- `MONGODB_URI`;
+- `MONGODB_DATABASE`;
+- `SERVER_PORT`;
+- `FRONTEND_BASE_URL`;
+- `MAIL_FROM`;
+- `RESEND_API_KEY`.
 
-La configuracion por hospital incluye, entre otros:
+Para desarrollo local existe la plantilla `config/application-secrets.properties.example`. El fichero real `config/application-secrets.properties` queda fuera de Git y se usa para secretos locales.
 
-- horas maximas semanales
-- descanso minimo entre turnos
-- dias consecutivos maximos
-- noches consecutivas maximas
-- peso de fairness
-- plus nocturno
-- plus festivo
-- multiplicador de horas extra
-- recalcule automatico
+En un VPS, lo recomendable es definir las variables mediante un fichero protegido, por ejemplo `/etc/tfg-hospital/secrets.env`, y cargarlo desde `systemd`.
 
-### Tipos de turno
+Ejemplo orientativo:
 
-Cada tipo define:
+```ini
+[Service]
+EnvironmentFile=/etc/tfg-hospital/secrets.env
+ExecStart=/usr/bin/java -jar /opt/tfg-hospital/backend/TFG-Hospital.jar
+Restart=always
+```
 
-- codigo
-- nombre
-- hora de inicio
-- hora de fin
-- cruce de medianoche
+### 10.2. Entorno de Ejecucion
 
-Ejemplos sembrados:
+#### Ejecucion local del backend
 
-- `MORNING`
-- `AFTERNOON`
-- `NIGHT`
-- `MIXED`
-
-### Demandas de turno
-
-Una demanda representa la necesidad de cobertura para:
-
-- una fecha
-- un departamento
-- un tipo de turno
-- un numero de trabajadores requeridos
-
-### Autoasignacion
-
-`SchedulingService` sigue una estrategia por fases:
-
-1. obtiene trabajadores del hospital
-2. descarta solapes
-3. intenta respetar descansos minimos
-4. intenta respetar horas semanales
-5. prioriza el mismo departamento
-6. reparte carga con una puntuacion simple basada en horas, fines de semana y noches
-
-Si no se cubre una demanda, el sistema notifica al administrador.
-
-## 6.6 Contratos laborales
-
-Cada trabajador puede tener un contrato activo con:
-
-- tarifa por hora
-- horas semanales
-- plus de nocturnidad
-- plus festivo
-- multiplicador de horas extra
-- fecha de vigencia
-- estado activo
-
-El contrato alimenta el calculo de nomina avanzada.
-
-## 6.7 Nomina avanzada
-
-La nomina se calcula a partir de:
-
-- contrato activo
-- turnos asignados o trabajados en el periodo
-- ausencias aprobadas
-- ajustes manuales
-
-Conceptos soportados en el desglose:
-
-- horas base
-- dias remunerados
-- nocturnidad
-- plus de fin de semana o festivo
-- horas extra
-- ausencias no remuneradas
-- bonus manuales
-- penalizaciones manuales
-
-La generacion deja:
-
-- un documento en `payrolls`
-- lineas de detalle en `payroll_items`
-- posibilidad de descarga PDF
-
-## 6.8 Chat, grupos y soporte
-
-El sistema permite:
-
-- chat privado
-- chat de hospital
-- chat de grupo
-- chat de soporte
-
-Los grupos de trabajo mantienen:
-
-- lista de miembros
-- nombres de miembros
-- chat vinculado
-
-## 6.9 Notificaciones y auditoria
-
-Se generan notificaciones funcionales cuando ocurre, por ejemplo:
-
-- asignacion de turno
-- nomina generada
-- demanda no cubierta
-
-Tambien se registran acciones sensibles en `audit_logs`, lo que ayuda a trazabilidad y depuracion.
-
-## 7. Modelo de datos MongoDB
-
-El proyecto usa MongoDB con colecciones separadas por dominio. No hay claves foraneas estrictas, pero si relaciones logicas por identificadores.
-
-## 7.1 Coleccion `users`
-
-Responsabilidad:
-
-- identidad del usuario y pertenencia al hospital
-
-Campos habituales:
-
-- `id`
-- `firstName`
-- `lastName`
-- `imageURL`
-- `email`
-- `password`
-- `phone`
-- `dni`
-- `role`
-- `enabled`
-- `accountNonLocked`
-- `hospitalId`
-- `hospitalName`
-- `department`
-- `jobTitle`
-- `hireDate`
-- `baseSalary`
-- `calendarEvents[]`
-- `createdAt`
-- `updatedAt`
-
-## 7.2 Coleccion `hospitals`
-
-Responsabilidad:
-
-- datos del centro y anuncios
-
-Campos habituales:
-
-- `id`
-- `name`
-- `address`
-- `city`
-- `province`
-- `taxId`
-- `status`
-- `announcements[]`
-- `createdAt`
-- `updatedAt`
-
-## 7.3 Coleccion `leave_requests`
-
-Responsabilidad:
-
-- ausencias de trabajadores
-
-Campos habituales:
-
-- `id`
-- `userId`
-- `hospitalId`
-- `startDate`
-- `endDate`
-- `reason`
-- `leaveType`
-- `paid`
-- `status`
-- `requestedAt`
-- `reviewedAt`
-- `reviewComment`
-
-## 7.4 Coleccion `hospital_settings`
-
-Responsabilidad:
-
-- reglas operativas y economicas por hospital
-
-Campos habituales:
-
-- `id`
-- `hospitalId`
-- `maxWeeklyHours`
-- `minRestHours`
-- `maxConsecutiveDays`
-- `maxConsecutiveNights`
-- `fairnessWeight`
-- `autoRecalculate`
-- `nightBonusPct`
-- `holidayBonusPct`
-- `overtimeMultiplier`
-
-## 7.5 Coleccion `shift_types`
-
-Responsabilidad:
-
-- catalogo de turnos configurables
-
-Campos habituales:
-
-- `id`
-- `hospitalId`
-- `code`
-- `name`
-- `startTime`
-- `endTime`
-- `crossesMidnight`
-
-## 7.6 Coleccion `shift_requirements`
-
-Responsabilidad:
-
-- necesidades de cobertura por fecha
-
-Campos habituales:
-
-- `id`
-- `hospitalId`
-- `department`
-- `date`
-- `shiftTypeCode`
-- `requiredWorkers`
-
-## 7.7 Coleccion `shift_assignments`
-
-Responsabilidad:
-
-- turnos asignados a trabajadores
-
-Campos habituales:
-
-- `id`
-- `hospitalId`
-- `workerId`
-- `workerFullName`
-- `department`
-- `shiftTypeCode`
-- `startAt`
-- `endAt`
-- `status`
-- `source`
-- `version`
-- `createdAt`
-- `updatedAt`
-
-## 7.8 Coleccion `worker_contracts`
-
-Responsabilidad:
-
-- contrato activo por trabajador
-
-Campos habituales:
-
-- `id`
-- `hospitalId`
-- `workerId`
-- `hourlyRate`
-- `weeklyHours`
-- `nightBonusPct`
-- `holidayBonusPct`
-- `overtimeMultiplier`
-- `effectiveFrom`
-- `active`
-- `createdAt`
-- `updatedAt`
-
-## 7.9 Coleccion `payrolls`
-
-Responsabilidad:
-
-- resumen de nomina por periodo
-
-Campos habituales:
-
-- `id`
-- `workerId`
-- `workerFullName`
-- `hospitalId`
-- `period`
-- `grossSalary`
-- `socialSecurityWorker`
-- `incomeTaxWithholding`
-- `otherDeductions`
-- `netSalary`
-- `overtimeAmount`
-- `bonusAmount`
-- `pdfPath`
-- `status`
-- `acknowledgedAt`
-- `issuedAt`
-
-## 7.10 Coleccion `payroll_items`
-
-Responsabilidad:
-
-- lineas de calculo de la nomina
-
-Campos habituales:
-
-- `id`
-- `payrollId`
-- `workerId`
-- `hospitalId`
-- `type`
-- `description`
-- `quantity`
-- `unitAmount`
-- `totalAmount`
-
-## 7.11 Coleccion `payroll_adjustments`
-
-Responsabilidad:
-
-- ajustes manuales positivos o negativos
-
-Campos habituales:
-
-- `id`
-- `hospitalId`
-- `workerId`
-- `period`
-- `type`
-- `description`
-- `amount`
-- `createdBy`
-- `createdAt`
-
-## 7.12 Colecciones de comunicacion
-
-### `chats`
-
-- `id`
-- `type`
-- `name`
-- `description`
-- `participants[]`
-- `participantNames[]`
-- `createdBy`
-- `hospitalId`
-- `lastMessage`
-- `lastMessageTime`
-- `unreadCounts`
-- `createdAt`
-- `updatedAt`
-
-### `chat_messages`
-
-- `id`
-- `chatId`
-- `senderId`
-- `senderImageURL`
-- `senderName`
-- `content`
-- `timestamp`
-- `read`
-
-### `work_groups`
-
-- `id`
-- `name`
-- `description`
-- `hospitalId`
-- `members[]`
-- `memberNames[]`
-- `createdBy`
-- `chatId`
-- `createdAt`
-- `updatedAt`
-
-## 7.13 Colecciones de soporte funcional
-
-### `notifications`
-
-- `id`
-- `userId`
-- `type`
-- `message`
-- `link`
-- `read`
-- `createdAt`
-
-### `audit_logs`
-
-- `id`
-- `hospitalId`
-- `actorUserId`
-- `action`
-- `entityType`
-- `entityId`
-- `details`
-- `createdAt`
-
-## 8. Relaciones logicas del dominio
-
-- un hospital tiene muchos usuarios
-- un usuario trabajador puede tener un contrato activo
-- un usuario trabajador puede tener muchas ausencias
-- un usuario trabajador puede tener muchas asignaciones de turno
-- una nomina pertenece a un trabajador y a un hospital
-- una nomina puede tener muchas lineas y muchos ajustes
-- un grupo de trabajo enlaza con un chat
-- una accion del sistema puede producir notificaciones y logs de auditoria
-
-## 9. Datos semilla y entorno demo
-
-`DataSeeder` se ejecuta al arrancar si detecta colecciones vacias.
-
-El seed actual prepara:
-
-- hospital principal `Hospital Reina Sofia`
-- usuario `ROOT`
-- usuario `HOSPITAL_ADMIN`
-- tres trabajadores de urgencias
-- contratos activos
-- ausencias pagadas y no pagadas
-- demandas de turno para los proximos dias
-- asignaciones mensuales para probar nomina
-- ajustes manuales
-- chats y grupo de urgencias
-
-Credenciales base:
-
-- `superadmin@trassierra.com` / `admin123`
-- `admin@hospital-reina-sofia.com` / `admin123`
-- `trabajador1@hospital-reina-sofia.com` / `worker123`
-- `trabajador2@hospital-reina-sofia.com` / `worker123`
-- `trabajador3@hospital-reina-sofia.com` / `worker123`
-
-Importante:
-
-- si la base de datos ya tiene datos, el seed no recrea el escenario completo;
-- para una demo limpia conviene vaciar colecciones antes de arrancar.
-
-## 10. Rutas principales del frontend
-
-- `/login`
-- `/dashboard/root`
-- `/dashboard/root/hospitals`
-- `/dashboard/root/stats`
-- `/dashboard/root/support`
-- `/dashboard/admin`
-- `/dashboard/admin/workers`
-- `/dashboard/admin/workers/[id]/calendar`
-- `/dashboard/admin/announcements`
-- `/dashboard/admin/leave-requests`
-- `/dashboard/admin/payrolls`
-- `/dashboard/admin/operations`
-- `/dashboard/admin/chat`
-- `/dashboard/admin/audit`
-- `/dashboard/worker`
-- `/dashboard/worker/calendar`
-- `/dashboard/worker/leave-requests`
-- `/dashboard/worker/payrolls`
-- `/dashboard/worker/chat`
-- `/dashboard/settings`
-
-## 11. Endpoints principales del backend
-
-Rutas base:
-
-- `/api/auth`
-- `/api/admin`
-- `/api/hospitals`
-- `/api/users`
-- `/api/leave-requests`
-- `/api/payrolls`
-- `/api/advanced-payroll`
-- `/api/hospital-settings`
-- `/api/shift-types`
-- `/api/scheduling`
-- `/api/worker-contracts`
-- `/api/chats`
-- `/api/work-groups`
-- `/api/notifications`
-- `/api/audit-logs`
-
-## 12. Configuracion y despliegue local
-
-## 12.1 Backend
-
-Desde la raiz:
+Desde la raiz del repositorio:
 
 ```powershell
-.\gradlew bootRun
+.\gradlew.bat bootRun
 ```
 
 La API escucha por defecto en:
 
-- `http://localhost:8080`
+- `http://localhost:8080`.
 
-## 12.2 Frontend
+#### Ejecucion local del frontend
 
 Desde `front-end`:
 
@@ -776,80 +434,130 @@ npm install
 npm run dev
 ```
 
-La UI se sirve por defecto en:
+La interfaz escucha por defecto en:
 
-- `http://localhost:3000`
+- `http://localhost:3000`.
 
-## 12.3 Configuracion actual conocida
+#### Repositorio de GitHub
 
-En [application.properties](C:/Users/Josel/Documents/GitHub/TFG-Hospital/src/main/resources/application.properties) aparecen:
+El proyecto esta versionado en:
 
-- nombre de aplicacion
-- URI de MongoDB
-- nombre de base de datos
-- puerto del backend
-- URL base del frontend
+- <https://github.com/Joseluuu315/TFG-Hospital>
 
-Recomendaciones:
+El remoto local configurado es:
 
-- sacar credenciales sensibles fuera del repositorio
-- usar variables de entorno o un fichero de secretos local
+- `origin https://github.com/Joseluuu315/TFG-Hospital.git`
 
-## 13. Estado tecnico y limitaciones
+GitHub se usa como punto central para:
 
-Puntos importantes del estado actual:
+- conservar historico del codigo;
+- compartir el proyecto;
+- documentar incidencias y mejoras mediante plantillas en `.github/ISSUE_TEMPLATE`;
+- facilitar despliegues en VPS mediante clonacion o pull del repositorio.
 
-- autenticacion basada en Spring Security con filtro Bearer real
-- sesiones persistidas en MongoDB mediante hashes de access y refresh token
-- contrasenas protegidas con BCrypt y migracion automatica de valores historicos en claro
-- autorizacion por endpoint presente a nivel de autenticacion; todavia se puede ampliar con reglas finas por rol
-- parte del valor del sistema depende del seed para demos
-- el PDF de nomina ya es funcional, pero visualmente es sencillo
+#### Despliegue en VPS
 
-Verificacion en este entorno:
+El despliegue en VPS se plantea separando backend, frontend y secretos:
 
-- backend validado con `./gradlew.bat build`
+- el backend se compila con Gradle y se ejecuta como servicio Java;
+- el frontend se instala y compila con npm, y se ejecuta con `npm run start` o se sirve detras de un proxy;
+- MongoDB puede estar en Atlas o en una instancia externa;
+- los secretos se inyectan por variables de entorno;
+- un proxy como Nginx puede exponer dominio publico, HTTPS y redireccionar `/api` al backend.
 
-## 14. Recomendaciones de mejora
+Flujo de despliegue recomendado:
 
-Prioridad alta:
+1. clonar el repositorio desde GitHub en el VPS;
+2. configurar variables de entorno y secretos;
+3. compilar backend con `.\gradlew.bat build` en Windows o `./gradlew build` en Linux;
+4. compilar frontend con `npm install` y `npm run build`;
+5. levantar backend con `systemd`;
+6. levantar frontend con `npm run start` o gestor de procesos;
+7. configurar Nginx y HTTPS;
+8. verificar `/actuator/health` y `/swagger-ui.html`.
 
-- externalizar secretos
-- reforzar autorizacion por rol en servidor
-- anadir tests unitarios y de integracion
+## 11. Pruebas y Limitaciones
 
-Prioridad media:
+### 11.1. Pruebas Realizadas
 
-- enriquecer el PDF de nomina
-- reforzar validaciones declarativas en DTOs
-- mejorar observabilidad y logs
-- ampliar criterios de fairness en autoasignacion
+El proyecto incluye pruebas automatizadas en `src/test`:
 
-Prioridad funcional:
+- `AuthServiceTest`;
+- `AdminStatsControllerSecurityTest`;
+- `UsersControllerSecurityTest`.
 
-- mas analitica y reportes
-- configuracion avanzada de festivos
-- historico de versiones de configuracion operativa
+Estas pruebas cubren puntos de autenticacion y seguridad de controladores. Ademas, el proyecto dispone de comandos de verificacion:
 
-## 15. Archivos clave para entender el sistema
+```powershell
+.\gradlew.bat build
+```
 
-Backend:
+```powershell
+cd front-end
+npm run lint
+npm run build
+```
 
-- [RunApp.java](C:/Users/Josel/Documents/GitHub/TFG-Hospital/src/main/java/com/joseluu/hospital/RunApp.java)
-- [DataSeeder.java](C:/Users/Josel/Documents/GitHub/TFG-Hospital/src/main/java/com/joseluu/hospital/service/DataSeeder.java)
-- [SchedulingService.java](C:/Users/Josel/Documents/GitHub/TFG-Hospital/src/main/java/com/joseluu/hospital/service/SchedulingService.java)
-- [AdvancedPayrollService.java](C:/Users/Josel/Documents/GitHub/TFG-Hospital/src/main/java/com/joseluu/hospital/service/AdvancedPayrollService.java)
-- [PayrollService.java](C:/Users/Josel/Documents/GitHub/TFG-Hospital/src/main/java/com/joseluu/hospital/service/PayrollService.java)
+En revisiones anteriores el backend se valido con `.\gradlew.bat build`. Para una entrega final conviene ejecutar de nuevo backend y frontend en el entorno donde se vaya a entregar o desplegar.
 
-Frontend:
+### 11.2. Limitaciones del Proyecto
 
-- [front-end/lib/api.ts](C:/Users/Josel/Documents/GitHub/TFG-Hospital/front-end/lib/api.ts)
-- [auth-context.tsx](C:/Users/Josel/Documents/GitHub/TFG-Hospital/front-end/contexts/auth-context.tsx)
-- [dashboard-shell.tsx](C:/Users/Josel/Documents/GitHub/TFG-Hospital/front-end/components/dashboard/dashboard-shell.tsx)
-- [admin operations](C:/Users/Josel/Documents/GitHub/TFG-Hospital/front-end/app/dashboard/admin/operations/page.tsx)
-- [admin payrolls](C:/Users/Josel/Documents/GitHub/TFG-Hospital/front-end/app/dashboard/admin/payrolls/page.tsx)
-- [worker payrolls](C:/Users/Josel/Documents/GitHub/TFG-Hospital/front-end/app/dashboard/worker/payrolls/page.tsx)
+- la autorizacion fina por rol puede reforzarse con reglas por endpoint y anotaciones mas especificas;
+- el PDF de nomina es funcional, pero puede mejorar visualmente;
+- el despliegue en VPS requiere configurar secretos y proxy correctamente;
+- el seed depende de que las colecciones esten vacias para preparar el escenario completo;
+- las pruebas automatizadas todavia pueden ampliarse mucho;
+- la autoasignacion usa reglas razonables, pero no cubre toda la complejidad legal y operativa real de un hospital.
 
-## 16. Conclusion
+## 12. Conclusiones y Lineas de Mejora
 
-`TFG-Hospital` ya cubre bastante mas que una simple demo CRUD. Su valor diferencial esta en unir administracion, planificacion, nomina y comunicacion en una sola base de codigo. La arquitectura es comprensible y extensible, y el modelo documental encaja bien con la flexibilidad del dominio. El siguiente salto de calidad pasa por reforzar seguridad, validacion y pruebas automatizadas sin perder la amplitud funcional ya conseguida.
+### 12.1. Conclusiones
+
+`TFG-Hospital` ha evolucionado hasta convertirse en una plataforma hospitalaria bastante completa para un Trabajo de Fin de Grado. Integra gestion administrativa, operativa y laboral, y lo hace con una arquitectura moderna separada entre backend y frontend.
+
+El proyecto destaca por la amplitud de modulos: seguridad, hospitales, trabajadores, ausencias, turnos, contratos, nominas, chat, notificaciones, auditoria y documentacion de API. Tambien esta mejor preparado para un entorno real gracias a la externalizacion de secretos, el uso de BCrypt, sesiones persistidas y despliegue previsto en VPS.
+
+### 12.2. Lineas de Mejora Futuras
+
+- reforzar autorizacion por rol en todos los endpoints sensibles;
+- ampliar pruebas unitarias, de integracion y end-to-end;
+- mejorar el diseno del PDF de nomina;
+- anadir paneles analiticos mas avanzados;
+- registrar historico de cambios en configuracion hospitalaria;
+- mejorar la estrategia de despliegue con CI/CD desde GitHub;
+- dockerizar backend, frontend y dependencias auxiliares;
+- anadir backups automatizados de MongoDB;
+- ampliar Swagger con ejemplos de request y response;
+- mejorar observabilidad con logs estructurados y metricas.
+
+## 13. Referencias
+
+### 13.1. Bibliografia
+
+- Repositorio GitHub del proyecto: <https://github.com/Joseluuu315/TFG-Hospital>
+- Documentacion oficial de Spring Boot: <https://spring.io/projects/spring-boot>
+- Documentacion oficial de Spring Security: <https://spring.io/projects/spring-security>
+- Documentacion oficial de Spring Data MongoDB: <https://spring.io/projects/spring-data-mongodb>
+- Documentacion oficial de MongoDB: <https://www.mongodb.com/docs/>
+- Documentacion oficial de Next.js: <https://nextjs.org/docs>
+- Documentacion oficial de React: <https://react.dev/>
+- Documentacion oficial de TypeScript: <https://www.typescriptlang.org/docs/>
+- Documentacion oficial de Tailwind CSS: <https://tailwindcss.com/docs>
+- Documentacion oficial de Radix UI: <https://www.radix-ui.com/>
+- Documentacion oficial de OpenAPI / Swagger: <https://swagger.io/specification/>
+
+### Archivos clave del proyecto
+
+- `README.md`
+- `build.gradle`
+- `src/main/resources/application.properties`
+- `config/application-secrets.properties.example`
+- `src/main/java/com/joseluu/hospital/security/SecurityConfig.java`
+- `src/main/java/com/joseluu/hospital/security/BearerTokenAuthenticationFilter.java`
+- `src/main/java/com/joseluu/hospital/service/AuthService.java`
+- `src/main/java/com/joseluu/hospital/service/SchedulingService.java`
+- `src/main/java/com/joseluu/hospital/service/AdvancedPayrollService.java`
+- `src/main/java/com/joseluu/hospital/service/DataSeeder.java`
+- `front-end/lib/api.ts`
+- `front-end/contexts/auth-context.tsx`
+- `front-end/next.config.mjs`
