@@ -33,7 +33,6 @@ public class SecurityConfig {
                                 "/api/auth/forgot-password",
                                 "/api/auth/reset-password",
                                 "/actuator/health",
-                                // Swagger UI — publico para documentacion y pruebas del TFG
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
