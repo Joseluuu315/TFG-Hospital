@@ -192,325 +192,332 @@ export default function PayrollsPage() {
   }
 
   return (
-    <DashboardShell title="Gestión de nóminas" description="Generación avanzada, ajustes manuales y detalle por conceptos">
-      <div className="flex flex-col gap-4 rounded-xl border bg-background/70 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar por trabajador..." className="pl-9" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-          </div>
-          <Input type="month" className="w-full sm:w-40" value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value)} />
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-36">
-              <SelectValue placeholder="Estado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="DRAFT">Borrador</SelectItem>
-              <SelectItem value="ISSUED">Emitida</SelectItem>
-              <SelectItem value="ACKNOWLEDGED">Confirmada</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      <DashboardShell title="Gestión de nóminas" description="Generación avanzada, ajustes manuales y detalle por conceptos">
+        {/* Wrapper principal con Flex para forzar el estiramiento vertical */}
+        <div className="flex flex-col gap-4 flex-1 h-full min-h-[calc(100vh-12rem)]">
 
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Dialog open={isAdjustmentOpen} onOpenChange={setIsAdjustmentOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <SlidersHorizontal className="mr-2 h-4 w-4" />
-                Ajuste manual
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Crear ajuste</DialogTitle>
-                <DialogDescription>Bonifica o penaliza un periodo antes de generar la nómina.</DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleCreateAdjustment}>
-                <FieldGroup className="py-4">
-                  <Field>
-                    <FieldLabel>Trabajador</FieldLabel>
-                    <Select value={adjustmentForm.workerId} onValueChange={(value) => setAdjustmentForm((current) => ({ ...current, workerId: value }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar trabajador" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {workers.map((worker) => (
-                          <SelectItem key={worker.id} value={String(worker.id)}>
-                            {worker.firstName} {worker.lastName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field>
-                    <FieldLabel>Periodo</FieldLabel>
-                    <Input type="month" value={adjustmentForm.period} onChange={(e) => setAdjustmentForm((current) => ({ ...current, period: e.target.value }))} required />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Tipo</FieldLabel>
-                    <Select value={adjustmentForm.type} onValueChange={(value: 'BONUS' | 'PENALTY') => setAdjustmentForm((current) => ({ ...current, type: value }))}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="BONUS">Bonificación</SelectItem>
-                        <SelectItem value="PENALTY">Penalización</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field>
-                    <FieldLabel>Descripción</FieldLabel>
-                    <Input value={adjustmentForm.description} onChange={(e) => setAdjustmentForm((current) => ({ ...current, description: e.target.value }))} required />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Importe</FieldLabel>
-                    <Input type="number" step="0.01" value={adjustmentForm.amount} onChange={(e) => setAdjustmentForm((current) => ({ ...current, amount: e.target.value }))} required />
-                  </Field>
-                </FieldGroup>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsAdjustmentOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? 'Guardando...' : 'Guardar ajuste'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={isGenerateOpen} onOpenChange={setIsGenerateOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Generar nómina
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Generación avanzada</DialogTitle>
-                <DialogDescription>Usa turnos, ausencias y ajustes manuales del periodo seleccionado.</DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleGeneratePayroll}>
-                <FieldGroup className="py-4">
-                  <Field>
-                    <FieldLabel>Trabajador</FieldLabel>
-                    <Select value={generateForm.workerId} onValueChange={(value) => setGenerateForm((current) => ({ ...current, workerId: value }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar trabajador" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {workers.map((worker) => (
-                          <SelectItem key={worker.id} value={String(worker.id)}>
-                            {worker.firstName} {worker.lastName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field>
-                    <FieldLabel>Periodo</FieldLabel>
-                    <Input type="month" value={generateForm.period} onChange={(e) => setGenerateForm((current) => ({ ...current, period: e.target.value }))} required />
-                  </Field>
-                </FieldGroup>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsGenerateOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? 'Generando...' : 'Generar'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Nóminas del hospital ({filteredPayrolls.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 md:hidden">
-            {filteredPayrolls.map((payroll) => (
-              <div key={payroll.id} className="rounded-xl border bg-background/70 p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold">{payroll.workerFullName}</p>
-                    <p className="text-sm text-muted-foreground">{formatMonthYear(`${payroll.period}-01`)}</p>
-                  </div>
-                  {getStatusBadge(payroll.status)}
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Bruto</p>
-                    <p className="font-medium">{formatCurrency(payroll.grossSalary)}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Neto</p>
-                    <p className="font-medium text-emerald-600">{formatCurrency(payroll.netSalary)}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-muted-foreground">Deducciones</p>
-                    <p className="font-medium">{formatCurrency(payroll.socialSecurityWorker + payroll.incomeTaxWithholding + payroll.otherDeductions)}</p>
-                  </div>
-                </div>
-                <div className="mt-4 flex gap-2">
-                  <Button variant="outline" className="flex-1" onClick={() => void openPayrollDetail(payroll)}>
-                    <Eye className="mr-2 h-4 w-4" />
-                    Ver detalle
-                  </Button>
-                  {payroll.status === 'DRAFT' ? (
-                    <Button className="flex-1" onClick={() => void handlePublishPayroll(payroll.id)} disabled={isPublishing === payroll.id}>
-                      <Send className="mr-2 h-4 w-4" />
-                      Emitir
-                    </Button>
-                  ) : (
-                    <Button className="flex-1" onClick={() => void handleDownload(payroll)}>
-                      <Download className="mr-2 h-4 w-4" />
-                      Descargar
-                    </Button>
-                  )}
-                </div>
+          {/* Barra superior de filtros - Usamos shrink-0 para que no reduzca su tamaño al estirar la tabla */}
+          <div className="flex shrink-0 flex-col gap-4 rounded-xl border bg-background/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Buscar por trabajador..." className="pl-9" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
               </div>
-            ))}
+              <Input type="month" className="w-full sm:w-40" value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value)} />
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full sm:w-36">
+                  <SelectValue placeholder="Estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="DRAFT">Borrador</SelectItem>
+                  <SelectItem value="ISSUED">Emitida</SelectItem>
+                  <SelectItem value="ACKNOWLEDGED">Confirmada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Dialog open={isAdjustmentOpen} onOpenChange={setIsAdjustmentOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <SlidersHorizontal className="mr-2 h-4 w-4" />
+                    Ajuste manual
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Crear ajuste</DialogTitle>
+                    <DialogDescription>Bonifica o penaliza un periodo antes de generar la nómina.</DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleCreateAdjustment}>
+                    <FieldGroup className="py-4">
+                      <Field>
+                        <FieldLabel>Trabajador</FieldLabel>
+                        <Select value={adjustmentForm.workerId} onValueChange={(value) => setAdjustmentForm((current) => ({ ...current, workerId: value }))}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar trabajador" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {workers.map((worker) => (
+                                <SelectItem key={worker.id} value={String(worker.id)}>
+                                  {worker.firstName} {worker.lastName}
+                                </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <Field>
+                        <FieldLabel>Periodo</FieldLabel>
+                        <Input type="month" value={adjustmentForm.period} onChange={(e) => setAdjustmentForm((current) => ({ ...current, period: e.target.value }))} required />
+                      </Field>
+                      <Field>
+                        <FieldLabel>Tipo</FieldLabel>
+                        <Select value={adjustmentForm.type} onValueChange={(value: 'BONUS' | 'PENALTY') => setAdjustmentForm((current) => ({ ...current, type: value }))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="BONUS">Bonificación</SelectItem>
+                            <SelectItem value="PENALTY">Penalización</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <Field>
+                        <FieldLabel>Descripción</FieldLabel>
+                        <Input value={adjustmentForm.description} onChange={(e) => setAdjustmentForm((current) => ({ ...current, description: e.target.value }))} required />
+                      </Field>
+                      <Field>
+                        <FieldLabel>Importe</FieldLabel>
+                        <Input type="number" step="0.01" value={adjustmentForm.amount} onChange={(e) => setAdjustmentForm((current) => ({ ...current, amount: e.target.value }))} required />
+                      </Field>
+                    </FieldGroup>
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setIsAdjustmentOpen(false)}>
+                        Cancelar
+                      </Button>
+                      <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? 'Guardando...' : 'Guardar ajuste'}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isGenerateOpen} onOpenChange={setIsGenerateOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Generar nómina
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Generación avanzada</DialogTitle>
+                    <DialogDescription>Usa turnos, ausencias y ajustes manuales del periodo seleccionado.</DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleGeneratePayroll}>
+                    <FieldGroup className="py-4">
+                      <Field>
+                        <FieldLabel>Trabajador</FieldLabel>
+                        <Select value={generateForm.workerId} onValueChange={(value) => setGenerateForm((current) => ({ ...current, workerId: value }))}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar trabajador" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {workers.map((worker) => (
+                                <SelectItem key={worker.id} value={String(worker.id)}>
+                                  {worker.firstName} {worker.lastName}
+                                </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <Field>
+                        <FieldLabel>Periodo</FieldLabel>
+                        <Input type="month" value={generateForm.period} onChange={(e) => setGenerateForm((current) => ({ ...current, period: e.target.value }))} required />
+                      </Field>
+                    </FieldGroup>
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setIsGenerateOpen(false)}>
+                        Cancelar
+                      </Button>
+                      <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? 'Generando...' : 'Generar'}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
 
-          <div className="hidden md:block overflow-x-auto">
-            <Table className="min-w-[860px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Trabajador</TableHead>
-                  <TableHead>Periodo</TableHead>
-                  <TableHead className="text-right">Bruto</TableHead>
-                  <TableHead className="text-right">Deducciones</TableHead>
-                  <TableHead className="text-right">Neto</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="w-32">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+          {/* Card principal con `flex-1` y `flex-col` para estirarse al máximo */}
+          <Card className="flex flex-1 flex-col shadow-md">
+            <CardHeader className="shrink-0">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Nóminas del hospital ({filteredPayrolls.length})
+              </CardTitle>
+            </CardHeader>
+            {/* Añadimos `flex-1` y `overflow-auto` para que el contenido sea desplazable internamente si es necesario */}
+            <CardContent className="flex-1 overflow-auto">
+              <div className="grid gap-3 md:hidden">
                 {filteredPayrolls.map((payroll) => (
-                  <TableRow key={payroll.id}>
-                    <TableCell className="font-medium">{payroll.workerFullName}</TableCell>
-                    <TableCell>{formatMonthYear(`${payroll.period}-01`)}</TableCell>
-                    <TableCell className="text-right whitespace-nowrap">{formatCurrency(payroll.grossSalary)}</TableCell>
-                    <TableCell className="text-right whitespace-nowrap text-muted-foreground">{formatCurrency(payroll.socialSecurityWorker + payroll.incomeTaxWithholding + payroll.otherDeductions)}</TableCell>
-                    <TableCell className="text-right whitespace-nowrap font-medium text-emerald-600">{formatCurrency(payroll.netSalary)}</TableCell>
-                    <TableCell>{getStatusBadge(payroll.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void openPayrollDetail(payroll)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        {payroll.status === 'DRAFT' ? (
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => void handlePublishPayroll(payroll.id)} disabled={isPublishing === payroll.id}>
-                            <Send className="h-4 w-4" />
-                          </Button>
-                        ) : (
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void handleDownload(payroll)}>
-                            <Download className="h-4 w-4" />
-                          </Button>
-                        )}
+                    <div key={payroll.id} className="rounded-xl border bg-background/70 p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold">{payroll.workerFullName}</p>
+                          <p className="text-sm text-muted-foreground">{formatMonthYear(`${payroll.period}-01`)}</p>
+                        </div>
+                        {getStatusBadge(payroll.status)}
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="flex flex-col w-[min(96vw,1100px)] max-w-5xl max-h-[92dvh] overflow-hidden p-0">
-          <DialogHeader className="px-5 pt-5 pb-0 shrink-0">
-            <DialogTitle>
-              Detalle de nómina {selectedPayroll ? `- ${selectedPayroll.workerFullName} (${formatMonthYear(`${selectedPayroll.period}-01`)})` : ''}
-            </DialogTitle>
-          </DialogHeader>
-          {selectedPayroll && (
-            <div className="space-y-4 overflow-y-auto px-4 pb-5 pt-4 sm:px-6">
-              <div className="grid gap-3 grid-cols-3">
-                <Card>
-                  <CardHeader className="pb-1 px-3 pt-3"><CardTitle className="text-xs text-muted-foreground">Bruto</CardTitle></CardHeader>
-                  <CardContent className="px-3 pb-3 text-lg font-semibold">{formatCurrency(selectedPayroll.grossSalary)}</CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-1 px-3 pt-3"><CardTitle className="text-xs text-muted-foreground">Deducciones</CardTitle></CardHeader>
-                  <CardContent className="px-3 pb-3 text-lg font-semibold text-destructive">
-                    {formatCurrency(selectedPayroll.socialSecurityWorker + selectedPayroll.incomeTaxWithholding + selectedPayroll.otherDeductions)}
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-1 px-3 pt-3"><CardTitle className="text-xs text-muted-foreground">Neto</CardTitle></CardHeader>
-                  <CardContent className="px-3 pb-3 text-lg font-semibold text-emerald-600">{formatCurrency(selectedPayroll.netSalary)}</CardContent>
-                </Card>
-              </div>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Líneas de cálculo</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {/* Vista tarjetas — móvil */}
-                  <div className="md:hidden divide-y">
-                    {selectedItems.length === 0 ? (
-                      <p className="py-6 text-center text-sm text-muted-foreground px-4">No hay conceptos detallados.</p>
-                    ) : selectedItems.map((item) => (
-                      <div key={item.id} className="px-4 py-3 space-y-1">
-                        <p className="text-sm font-medium">{item.description}</p>
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{item.quantity} × {formatCurrency(item.unitAmount)}</span>
-                          <span className={`font-semibold ${item.totalAmount >= 0 ? 'text-foreground' : 'text-destructive'}`}>
-                            {formatCurrency(item.totalAmount)}
-                          </span>
+                      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-muted-foreground">Bruto</p>
+                          <p className="font-medium">{formatCurrency(payroll.grossSalary)}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Neto</p>
+                          <p className="font-medium text-emerald-600">{formatCurrency(payroll.netSalary)}</p>
+                        </div>
+                        <div className="col-span-2">
+                          <p className="text-muted-foreground">Deducciones</p>
+                          <p className="font-medium">{formatCurrency(payroll.socialSecurityWorker + payroll.incomeTaxWithholding + payroll.otherDeductions)}</p>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                  {/* Vista tabla — desktop */}
-                  <div className="hidden md:block overflow-x-auto">
-                    <Table className="min-w-[600px]">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Concepto</TableHead>
-                          <TableHead className="text-right">Cantidad</TableHead>
-                          <TableHead className="text-right">Unitario</TableHead>
-                          <TableHead className="text-right">Total</TableHead>
+                      <div className="mt-4 flex gap-2">
+                        <Button variant="outline" className="flex-1" onClick={() => void openPayrollDetail(payroll)}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          Ver detalle
+                        </Button>
+                        {payroll.status === 'DRAFT' ? (
+                            <Button className="flex-1" onClick={() => void handlePublishPayroll(payroll.id)} disabled={isPublishing === payroll.id}>
+                              <Send className="mr-2 h-4 w-4" />
+                              Emitir
+                            </Button>
+                        ) : (
+                            <Button className="flex-1" onClick={() => void handleDownload(payroll)}>
+                              <Download className="mr-2 h-4 w-4" />
+                              Descargar
+                            </Button>
+                        )}
+                      </div>
+                    </div>
+                ))}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto h-full">
+                <Table className="min-w-[860px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Trabajador</TableHead>
+                      <TableHead>Periodo</TableHead>
+                      <TableHead className="text-right">Bruto</TableHead>
+                      <TableHead className="text-right">Deducciones</TableHead>
+                      <TableHead className="text-right">Neto</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead className="w-32">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredPayrolls.map((payroll) => (
+                        <TableRow key={payroll.id}>
+                          <TableCell className="font-medium">{payroll.workerFullName}</TableCell>
+                          <TableCell>{formatMonthYear(`${payroll.period}-01`)}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap">{formatCurrency(payroll.grossSalary)}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap text-muted-foreground">{formatCurrency(payroll.socialSecurityWorker + payroll.incomeTaxWithholding + payroll.otherDeductions)}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap font-medium text-emerald-600">{formatCurrency(payroll.netSalary)}</TableCell>
+                          <TableCell>{getStatusBadge(payroll.status)}</TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void openPayrollDetail(payroll)}>
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              {payroll.status === 'DRAFT' ? (
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => void handlePublishPayroll(payroll.id)} disabled={isPublishing === payroll.id}>
+                                    <Send className="h-4 w-4" />
+                                  </Button>
+                              ) : (
+                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void handleDownload(payroll)}>
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                              )}
+                            </div>
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedItems.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={4} className="text-center text-muted-foreground">
-                              No hay conceptos detallados disponibles.
-                            </TableCell>
-                          </TableRow>
-                        ) : selectedItems.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell className="max-w-[420px] whitespace-normal break-words font-medium">{item.description}</TableCell>
-                            <TableCell className="text-right whitespace-nowrap">{item.quantity}</TableCell>
-                            <TableCell className="text-right whitespace-nowrap">{formatCurrency(item.unitAmount)}</TableCell>
-                            <TableCell className={`text-right whitespace-nowrap font-medium ${item.totalAmount >= 0 ? 'text-foreground' : 'text-destructive'}`}>
-                              {formatCurrency(item.totalAmount)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+          <DialogContent className="flex flex-col w-[96vw] sm:max-w-5xl max-h-[92dvh] overflow-hidden p-0">
+            <DialogHeader className="px-5 pt-5 pb-0 shrink-0">
+              <DialogTitle>
+                Detalle de nómina {selectedPayroll ? `- ${selectedPayroll.workerFullName} (${formatMonthYear(`${selectedPayroll.period}-01`)})` : ''}
+              </DialogTitle>
+            </DialogHeader>
+            {selectedPayroll && (
+                <div className="space-y-4 overflow-y-auto px-4 pb-5 pt-4 sm:px-6">
+                  <div className="grid gap-3 grid-cols-3">
+                    <Card>
+                      <CardHeader className="pb-1 px-3 pt-3"><CardTitle className="text-xs text-muted-foreground">Bruto</CardTitle></CardHeader>
+                      <CardContent className="px-3 pb-3 text-lg font-semibold">{formatCurrency(selectedPayroll.grossSalary)}</CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="pb-1 px-3 pt-3"><CardTitle className="text-xs text-muted-foreground">Deducciones</CardTitle></CardHeader>
+                      <CardContent className="px-3 pb-3 text-lg font-semibold text-destructive">
+                        {formatCurrency(selectedPayroll.socialSecurityWorker + selectedPayroll.incomeTaxWithholding + selectedPayroll.otherDeductions)}
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="pb-1 px-3 pt-3"><CardTitle className="text-xs text-muted-foreground">Neto</CardTitle></CardHeader>
+                      <CardContent className="px-3 pb-3 text-lg font-semibold text-emerald-600">{formatCurrency(selectedPayroll.netSalary)}</CardContent>
+                    </Card>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </DashboardShell>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Líneas de cálculo</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      {/* Vista tarjetas — móvil */}
+                      <div className="md:hidden divide-y">
+                        {selectedItems.length === 0 ? (
+                            <p className="py-6 text-center text-sm text-muted-foreground px-4">No hay conceptos detallados.</p>
+                        ) : selectedItems.map((item) => (
+                            <div key={item.id} className="px-4 py-3 space-y-1">
+                              <p className="text-sm font-medium">{item.description}</p>
+                              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <span>{item.quantity} × {formatCurrency(item.unitAmount)}</span>
+                                <span className={`font-semibold ${item.totalAmount >= 0 ? 'text-foreground' : 'text-destructive'}`}>
+                            {formatCurrency(item.totalAmount)}
+                          </span>
+                              </div>
+                            </div>
+                        ))}
+                      </div>
+                      {/* Vista tabla — desktop */}
+                      <div className="hidden md:block overflow-x-auto">
+                        <Table className="min-w-[600px]">
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Concepto</TableHead>
+                              <TableHead className="text-right">Cantidad</TableHead>
+                              <TableHead className="text-right">Unitario</TableHead>
+                              <TableHead className="text-right">Total</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {selectedItems.length === 0 ? (
+                                <TableRow>
+                                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                                    No hay conceptos detallados disponibles.
+                                  </TableCell>
+                                </TableRow>
+                            ) : selectedItems.map((item) => (
+                                <TableRow key={item.id}>
+                                  <TableCell className="max-w-[420px] whitespace-normal break-words font-medium">{item.description}</TableCell>
+                                  <TableCell className="text-right whitespace-nowrap">{item.quantity}</TableCell>
+                                  <TableCell className="text-right whitespace-nowrap">{formatCurrency(item.unitAmount)}</TableCell>
+                                  <TableCell className={`text-right whitespace-nowrap font-medium ${item.totalAmount >= 0 ? 'text-foreground' : 'text-destructive'}`}>
+                                    {formatCurrency(item.totalAmount)}
+                                  </TableCell>
+                                </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      </DashboardShell>
   );
 }
