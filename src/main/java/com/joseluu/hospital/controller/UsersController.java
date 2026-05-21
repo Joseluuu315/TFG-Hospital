@@ -79,8 +79,10 @@ public class UsersController {
     @Operation(summary = "Crear trabajador", description = "Da de alta un nuevo trabajador en el hospital. Solo HOSPITAL_ADMIN o ROOT.")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @PostMapping
-    public UserDto create(@Valid @RequestBody CreateUserRequestDto request) {
-        return userService.createWorker(request);
+    public UserDto create(@RequestHeader(name = "Authorization", required = false) String authorization,
+                          @Valid @RequestBody CreateUserRequestDto request) {
+        UserDto actor = authService.getUserFromBearer(authorization);
+        return userService.createWorker(request, actor);
     }
 
     /**
@@ -90,8 +92,25 @@ public class UsersController {
     @Operation(summary = "Actualizar usuario", description = "Actualiza los datos operativos de un usuario. Solo HOSPITAL_ADMIN o ROOT.")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @PutMapping("/{id}")
-    public UserDto update(@PathVariable String id, @RequestBody UpdateUserRequestDto request) {
-        return userService.updateUser(id, request);
+    public UserDto update(@RequestHeader(name = "Authorization", required = false) String authorization,
+                          @PathVariable String id,
+                          @RequestBody UpdateUserRequestDto request) {
+        UserDto actor = authService.getUserFromBearer(authorization);
+        return userService.updateUser(id, request, actor);
+    }
+
+    /**
+     * Elimina un trabajador y sus datos operativos asociados.
+     * HOSPITAL_ADMIN solo puede borrar trabajadores de su hospital; ROOT puede borrar cualquier usuario no ROOT.
+     */
+    @Operation(summary = "Eliminar usuario", description = "Elimina un trabajador y limpia datos vinculados. Solo HOSPITAL_ADMIN o ROOT.")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@RequestHeader(name = "Authorization", required = false) String authorization,
+                                       @PathVariable String id) {
+        UserDto actor = authService.getUserFromBearer(authorization);
+        userService.deleteUser(id, actor);
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -140,7 +159,7 @@ public class UsersController {
             @RequestHeader(name = "Authorization", required = false) String authorization,
             @RequestBody UpdateUserRequestDto request) {
         UserDto user = authService.getUserFromBearer(authorization);
-        return userService.updateUser(user.getId(), request);
+        return userService.updateMyProfile(user.getId(), request);
     }
 
     /**

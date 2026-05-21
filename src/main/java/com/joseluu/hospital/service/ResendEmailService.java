@@ -132,12 +132,16 @@ public class ResendEmailService {
     }
 
     public void assertConfigured() {
-        if (apiKey == null || apiKey.isBlank()) {
+        if (!isConfigured()) {
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR,
                     "Resend no esta configurado. Define app.mail.resend.api-key."
             );
         }
+    }
+
+    public boolean isConfigured() {
+        return apiKey != null && !apiKey.isBlank();
     }
 
     private String extractError(String responseBody) {

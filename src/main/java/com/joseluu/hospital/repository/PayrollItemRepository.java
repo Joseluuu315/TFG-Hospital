@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface PayrollItemRepository extends MongoRepository<PayrollItemDocument, String> {
     List<PayrollItemDocument> findByPayrollId(String payrollId);
+    void deleteByPayrollId(String payrollId);
+    void deleteByWorkerId(String workerId);
 }

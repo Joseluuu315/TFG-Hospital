@@ -16,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +57,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({BadRequestException.class, IllegalArgumentException.class})
     public ResponseEntity<ApiErrorResponse> handleBadRequest(RuntimeException ex, HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null, null);
+    }
+
+    /**
+     * Devuelve 400 para fechas o periodos con formato invalido.
+     */
+    @ExceptionHandler(DateTimeParseException.class)
+    public ResponseEntity<ApiErrorResponse> handleDateParse(DateTimeParseException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "Formato de fecha o periodo invalido", request, null, null);
     }
 
     /**

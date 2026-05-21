@@ -9,6 +9,7 @@ import java.util.Optional;
 
 public interface UserRepository extends MongoRepository<UserDocument, String> {
     Optional<UserDocument> findByEmailIgnoreCase(String email);
+    Optional<UserDocument> findByDniIgnoreCase(String dni);
     Optional<UserDocument> findByPasswordResetTokenHash(String passwordResetTokenHash);
     List<UserDocument> findByRole(UserRole role);
     List<UserDocument> findByHospitalId(String hospitalId);

@@ -9,4 +9,6 @@ import java.util.Optional;
 public interface WorkerContractRepository extends MongoRepository<WorkerContractDocument, String> {
     Optional<WorkerContractDocument> findByWorkerIdAndActiveTrue(String workerId);
     List<WorkerContractDocument> findByHospitalId(String hospitalId);
+    void deleteByWorkerId(String workerId);
+    void deleteByHospitalId(String hospitalId);
 }

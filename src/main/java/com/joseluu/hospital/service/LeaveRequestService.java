@@ -84,13 +84,18 @@ public class LeaveRequestService {
     /**
      * Revisa una solicitud existente y notifica el resultado.
      */
-    public LeaveRequestWithUserDto review(String userId, String requestId, LeaveRequestStatus status, String comment) {
+    public LeaveRequestWithUserDto review(String userId,
+                                          String requestId,
+                                          LeaveRequestStatus status,
+                                          String comment,
+                                          UserDto actor) {
         LeaveRequestDocument document = leaveRequestRepository.findById(requestId)
                 .orElseThrow(() -> new NotFoundException("La solicitud no existe"));
 
         if (!document.getUserId().equals(userId)) {
             throw new ForbiddenException("La solicitud no pertenece al usuario");
         }
+        validateReviewScope(document, actor);
 
         document.setStatus(status);
         document.setReviewComment(comment);
@@ -99,6 +104,21 @@ public class LeaveRequestService {
         LeaveRequestWithUserDto dto = wrapWithUser(leaveRequestRepository.save(document));
         notifyReviewResult(userId, status);
         return dto;
+    }
+
+    /**
+     * Valida que el revisor pertenezca al hospital de la solicitud salvo ROOT.
+     */
+    private void validateReviewScope(LeaveRequestDocument document, UserDto actor) {
+        if (actor.getRole() == UserRole.ROOT) {
+            return;
+        }
+        if (actor.getRole() == UserRole.HOSPITAL_ADMIN
+                && actor.getHospitalId() != null
+                && actor.getHospitalId().equals(document.getHospitalId())) {
+            return;
+        }
+        throw new ForbiddenException("No puedes revisar solicitudes de otro hospital");
     }
 
     /**

@@ -5,6 +5,7 @@ import com.joseluu.hospital.dto.CreateHospitalRequestDto;
 import com.joseluu.hospital.dto.HospitalDto;
 import com.joseluu.hospital.entity.AnnouncementDocument;
 import com.joseluu.hospital.entity.HospitalDocument;
+import com.joseluu.hospital.entity.PayrollDocument;
 import com.joseluu.hospital.entity.UserDocument;
 import com.joseluu.hospital.entity.enums.HospitalStatus;
 import com.joseluu.hospital.entity.enums.NotificationType;
@@ -14,11 +15,22 @@ import com.joseluu.hospital.exception.NotFoundException;
 import com.joseluu.hospital.repository.ChatMessageRepository;
 import com.joseluu.hospital.repository.ChatRepository;
 import com.joseluu.hospital.repository.HospitalRepository;
+import com.joseluu.hospital.repository.HospitalSettingsRepository;
 import com.joseluu.hospital.repository.LeaveRequestRepository;
+import com.joseluu.hospital.repository.NotificationRepository;
+import com.joseluu.hospital.repository.PayrollAdjustmentRepository;
+import com.joseluu.hospital.repository.PayrollItemRepository;
 import com.joseluu.hospital.repository.PayrollRepository;
+import com.joseluu.hospital.repository.ShiftAssignmentRepository;
+import com.joseluu.hospital.repository.ShiftRequirementRepository;
+import com.joseluu.hospital.repository.ShiftTypeRepository;
 import com.joseluu.hospital.repository.UserRepository;
+import com.joseluu.hospital.repository.WorkerContractRepository;
 import com.joseluu.hospital.repository.WorkGroupRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -30,6 +42,8 @@ import java.util.UUID;
  */
 @Service
 public class HospitalService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(HospitalService.class);
+
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
@@ -43,6 +57,14 @@ public class HospitalService {
     private final ShiftTypeService shiftTypeService;
     private final PasswordService passwordService;
     private final ResendEmailService resendEmailService;
+    private final PayrollItemRepository payrollItemRepository;
+    private final PayrollAdjustmentRepository payrollAdjustmentRepository;
+    private final WorkerContractRepository workerContractRepository;
+    private final ShiftAssignmentRepository shiftAssignmentRepository;
+    private final ShiftRequirementRepository shiftRequirementRepository;
+    private final ShiftTypeRepository shiftTypeRepository;
+    private final HospitalSettingsRepository hospitalSettingsRepository;
+    private final NotificationRepository notificationRepository;
 
     public HospitalService(HospitalRepository hospitalRepository,
                            UserRepository userRepository,
@@ -56,7 +78,15 @@ public class HospitalService {
                            AuditLogService auditLogService,
                            ShiftTypeService shiftTypeService,
                            PasswordService passwordService,
-                           ResendEmailService resendEmailService) {
+                           ResendEmailService resendEmailService,
+                           PayrollItemRepository payrollItemRepository,
+                           PayrollAdjustmentRepository payrollAdjustmentRepository,
+                           WorkerContractRepository workerContractRepository,
+                           ShiftAssignmentRepository shiftAssignmentRepository,
+                           ShiftRequirementRepository shiftRequirementRepository,
+                           ShiftTypeRepository shiftTypeRepository,
+                           HospitalSettingsRepository hospitalSettingsRepository,
+                           NotificationRepository notificationRepository) {
         this.hospitalRepository = hospitalRepository;
         this.userRepository = userRepository;
         this.notificationService = notificationService;
@@ -70,6 +100,14 @@ public class HospitalService {
         this.shiftTypeService = shiftTypeService;
         this.passwordService = passwordService;
         this.resendEmailService = resendEmailService;
+        this.payrollItemRepository = payrollItemRepository;
+        this.payrollAdjustmentRepository = payrollAdjustmentRepository;
+        this.workerContractRepository = workerContractRepository;
+        this.shiftAssignmentRepository = shiftAssignmentRepository;
+        this.shiftRequirementRepository = shiftRequirementRepository;
+        this.shiftTypeRepository = shiftTypeRepository;
+        this.hospitalSettingsRepository = hospitalSettingsRepository;
+        this.notificationRepository = notificationRepository;
     }
 
     /**
@@ -94,10 +132,6 @@ public class HospitalService {
      * Crea un hospital con configuracion inicial.
      */
     public HospitalDto create(CreateHospitalRequestDto request) {
-        if (request.getAdminEmail() != null && !request.getAdminEmail().isBlank()) {
-            resendEmailService.assertConfigured();
-        }
-
         LocalDateTime now = LocalDateTime.now();
         String hospitalId = UUID.randomUUID().toString();
 
@@ -162,9 +196,12 @@ public class HospitalService {
      * Elimina un hospital y sus datos relacionados.
      */
     public void delete(String id) {
+        requireHospital(id);
         deleteUsersFromHospital(id);
         deleteWorkGroupsFromHospital(id);
         deleteChatsFromHospital(id);
+        deleteOperationsFromHospital(id);
+        hospitalSettingsRepository.deleteById(id);
         hospitalRepository.deleteById(id);
     }
 
@@ -324,16 +361,11 @@ public class HospitalService {
                 .build();
 
         userRepository.save(admin);
-        resendEmailService.sendWelcomeCredentialsEmail(
-                admin.getEmail(),
-                (admin.getFirstName() + " " + admin.getLastName()).trim(),
-                hospital.getName(),
-                temporaryPassword
-        );
+        sendWelcomeEmailIfPossible(admin, hospital.getName(), temporaryPassword);
         notificationService.createNotification(
                 admin.getId(),
                 NotificationType.NEW_ANNOUNCEMENT,
-                "Cuenta inicial creada. Se ha enviado el acceso temporal al correo corporativo."
+                "Cuenta inicial creada. Revisa el correo corporativo si el envio esta configurado."
         );
     }
 
@@ -364,9 +396,46 @@ public class HospitalService {
 
             leaveRequestRepository.findByUserId(user.getId())
                     .forEach(request -> leaveRequestRepository.deleteById(request.getId()));
-            payrollRepository.findByWorkerId(user.getId())
-                    .forEach(payroll -> payrollRepository.deleteById(payroll.getId()));
+            for (PayrollDocument payroll : payrollRepository.findByWorkerId(user.getId())) {
+                payrollItemRepository.deleteByPayrollId(payroll.getId());
+                payrollRepository.deleteById(payroll.getId());
+            }
+            workerContractRepository.deleteByWorkerId(user.getId());
+            payrollAdjustmentRepository.deleteByWorkerId(user.getId());
+            notificationRepository.deleteByUserId(user.getId());
             userRepository.deleteById(user.getId());
+        }
+    }
+
+    /**
+     * Elimina datos operativos no embebidos del hospital.
+     */
+    private void deleteOperationsFromHospital(String hospitalId) {
+        payrollAdjustmentRepository.deleteByHospitalId(hospitalId);
+        workerContractRepository.deleteByHospitalId(hospitalId);
+        shiftAssignmentRepository.deleteByHospitalId(hospitalId);
+        shiftRequirementRepository.deleteByHospitalId(hospitalId);
+        shiftTypeRepository.deleteByHospitalId(hospitalId);
+    }
+
+    /**
+     * El alta del hospital no debe depender de que el correo externo este activo.
+     */
+    private void sendWelcomeEmailIfPossible(UserDocument admin, String hospitalName, String temporaryPassword) {
+        if (!resendEmailService.isConfigured()) {
+            LOGGER.warn("Resend no esta configurado; admin {} creado sin correo de bienvenida", admin.getEmail());
+            return;
+        }
+
+        try {
+            resendEmailService.sendWelcomeCredentialsEmail(
+                    admin.getEmail(),
+                    (admin.getFirstName() + " " + admin.getLastName()).trim(),
+                    hospitalName,
+                    temporaryPassword
+            );
+        } catch (ResponseStatusException exception) {
+            LOGGER.warn("No se pudo enviar el correo de bienvenida a {}: {}", admin.getEmail(), exception.getReason());
         }
     }
 

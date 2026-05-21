@@ -58,6 +58,17 @@ public class PayrollService {
     }
 
     /**
+     * Lista las nominas de un hospital.
+     */
+    public List<PayrollDto> getByHospital(String hospitalId) {
+        List<PayrollDto> payrolls = new ArrayList<>();
+        for (PayrollDocument document : payrollRepository.findByHospitalId(hospitalId)) {
+            payrolls.add(toDto(document));
+        }
+        return payrolls;
+    }
+
+    /**
      * Obtiene una nomina por identificador.
      */
     public PayrollDto getById(String id) {

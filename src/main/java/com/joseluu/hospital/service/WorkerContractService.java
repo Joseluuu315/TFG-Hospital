@@ -2,8 +2,11 @@ package com.joseluu.hospital.service;
 
 import com.joseluu.hospital.dto.HospitalSettingsDto;
 import com.joseluu.hospital.dto.UpsertWorkerContractRequestDto;
+import com.joseluu.hospital.dto.UserDto;
 import com.joseluu.hospital.dto.WorkerContractDto;
 import com.joseluu.hospital.entity.UserDocument;
+import com.joseluu.hospital.entity.enums.UserRole;
+import com.joseluu.hospital.exception.ForbiddenException;
 import com.joseluu.hospital.entity.WorkerContractDocument;
 import com.joseluu.hospital.exception.NotFoundException;
 import com.joseluu.hospital.repository.UserRepository;
@@ -34,7 +37,9 @@ public class WorkerContractService {
     /**
      * Devuelve el contrato activo de un trabajador.
      */
-    public WorkerContractDto getActiveByWorker(String workerId) {
+    public WorkerContractDto getActiveByWorker(String workerId, UserDto actor) {
+        UserDocument worker = requireWorker(workerId);
+        validateHospitalAccess(worker.getHospitalId(), actor);
         return workerContractRepository.findByWorkerIdAndActiveTrue(workerId)
                 .map(this::toDto)
                 .orElseThrow(() -> new NotFoundException("Contrato no encontrado"));
@@ -43,7 +48,8 @@ public class WorkerContractService {
     /**
      * Crea o sustituye el contrato activo del trabajador.
      */
-    public WorkerContractDto upsert(String hospitalId, UpsertWorkerContractRequestDto request) {
+    public WorkerContractDto upsert(String hospitalId, UpsertWorkerContractRequestDto request, UserDto actor) {
+        validateHospitalAccess(hospitalId, actor);
         UserDocument worker = requireWorkerInHospital(hospitalId, request.getWorkerId());
         deactivateCurrentContract(worker.getId());
 
@@ -72,12 +78,31 @@ public class WorkerContractService {
      * Obtiene el trabajador y comprueba que pertenece al hospital.
      */
     private UserDocument requireWorkerInHospital(String hospitalId, String workerId) {
-        UserDocument worker = userRepository.findById(workerId)
-                .orElseThrow(() -> new NotFoundException("Trabajador no encontrado"));
+        UserDocument worker = requireWorker(workerId);
         if (!hospitalId.equals(worker.getHospitalId())) {
             throw new NotFoundException("Trabajador fuera del hospital");
         }
         return worker;
+    }
+
+    private UserDocument requireWorker(String workerId) {
+        return userRepository.findById(workerId)
+                .orElseThrow(() -> new NotFoundException("Trabajador no encontrado"));
+    }
+
+    private void validateHospitalAccess(String hospitalId, UserDto actor) {
+        if (actor == null || actor.getRole() == null) {
+            throw new ForbiddenException("No tienes permisos para gestionar contratos");
+        }
+        if (actor.getRole() == UserRole.ROOT) {
+            return;
+        }
+        if (actor.getRole() == UserRole.HOSPITAL_ADMIN
+                && actor.getHospitalId() != null
+                && actor.getHospitalId().equals(hospitalId)) {
+            return;
+        }
+        throw new ForbiddenException("Solo puedes gestionar contratos de tu hospital");
     }
 
     /**

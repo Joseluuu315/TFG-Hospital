@@ -128,6 +128,9 @@ public class SchedulingService {
     public ShiftAssignmentDto manualAssign(String hospitalId, String actorUserId, ManualShiftRequestDto dto) {
         UserDocument worker = userRepository.findById(dto.getWorkerId())
                 .orElseThrow(() -> new NotFoundException("Trabajador no encontrado"));
+        if (!hospitalId.equals(worker.getHospitalId())) {
+            throw new NotFoundException("Trabajador fuera del hospital");
+        }
 
         ShiftDateRange range = buildManualRange(hospitalId, dto);
         LocalDateTime now = LocalDateTime.now();

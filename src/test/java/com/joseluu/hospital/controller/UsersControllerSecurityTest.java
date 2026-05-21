@@ -38,7 +38,7 @@ class UsersControllerSecurityTest {
     @Test
     @DisplayName("create debe exigir HOSPITAL_ADMIN o ROOT")
     void create_shouldRequireAdminOrRoot() throws NoSuchMethodException {
-        Method method = UsersController.class.getMethod("create", CreateUserRequestDto.class);
+        Method method = UsersController.class.getMethod("create", String.class, CreateUserRequestDto.class);
         PreAuthorize annotation = method.getAnnotation(PreAuthorize.class);
 
         assertThat(annotation)
@@ -52,7 +52,7 @@ class UsersControllerSecurityTest {
     @Test
     @DisplayName("create no debe permitir WORKER")
     void create_shouldNotAllowWorkerRole() throws NoSuchMethodException {
-        Method method = UsersController.class.getMethod("create", CreateUserRequestDto.class);
+        Method method = UsersController.class.getMethod("create", String.class, CreateUserRequestDto.class);
         PreAuthorize annotation = method.getAnnotation(PreAuthorize.class);
 
         assertThat(annotation).isNotNull();
@@ -81,5 +81,16 @@ class UsersControllerSecurityTest {
 
         assertThat(annotation).isNotNull();
         assertThat(annotation.value()).contains("isAuthenticated()");
+    }
+
+    @Test
+    @DisplayName("delete debe exigir HOSPITAL_ADMIN o ROOT")
+    void delete_shouldRequireAdminOrRoot() throws NoSuchMethodException {
+        Method method = UsersController.class.getDeclaredMethod("delete", String.class, String.class);
+        PreAuthorize annotation = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(annotation).isNotNull();
+        assertThat(annotation.value()).containsAnyOf("HOSPITAL_ADMIN", "ROOT");
+        assertThat(annotation.value()).doesNotContain("isAuthenticated()");
     }
 }

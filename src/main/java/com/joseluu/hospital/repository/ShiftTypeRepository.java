@@ -9,4 +9,5 @@ import java.util.Optional;
 public interface ShiftTypeRepository extends MongoRepository<ShiftTypeDocument, String> {
     List<ShiftTypeDocument> findByHospitalId(String hospitalId);
     Optional<ShiftTypeDocument> findByHospitalIdAndCode(String hospitalId, String code);
+    void deleteByHospitalId(String hospitalId);
 }

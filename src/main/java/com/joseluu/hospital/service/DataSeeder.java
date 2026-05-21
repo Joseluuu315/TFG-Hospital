@@ -54,6 +54,8 @@ import java.util.UUID;
  */
 @Component
 public class DataSeeder implements ApplicationRunner {
+    private static final String DELETE_TEST_USER_EMAIL = "borrar.trabajador@hospital-reina-sofia.com";
+
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
     private final PayrollRepository payrollRepository;
@@ -125,6 +127,7 @@ public class DataSeeder implements ApplicationRunner {
         if (userRepository.count() == 0) {
             seedUsers();
         }
+        ensureDeleteTestUser();
         if (shiftTypeRepository.count() == 0) {
             seedShiftTypes();
         }
@@ -268,7 +271,7 @@ public class DataSeeder implements ApplicationRunner {
     }
 
     /**
-     * Crea usuarios iniciales (root, admin y tres trabajadores).
+     * Crea usuarios iniciales (root, admin, trabajadores base y un trabajador de borrado).
      */
     private void seedUsers() {
         LocalDateTime now = LocalDateTime.now();
@@ -379,7 +382,46 @@ public class DataSeeder implements ApplicationRunner {
                 .build();
         worker3Id = worker3RefId;
 
-        userRepository.saveAll(Arrays.asList(root, admin, worker, worker2, worker3));
+        UserDocument deleteTestWorker = buildDeleteTestUser(now);
+
+        userRepository.saveAll(Arrays.asList(root, admin, worker, worker2, worker3, deleteTestWorker));
+    }
+
+    /**
+     * Garantiza un trabajador aislado para probar borrados tambien en bases ya sembradas.
+     */
+    private void ensureDeleteTestUser() {
+        if (hospitalId == null || userRepository.findByEmailIgnoreCase(DELETE_TEST_USER_EMAIL).isPresent()) {
+            return;
+        }
+        userRepository.save(buildDeleteTestUser(LocalDateTime.now()));
+    }
+
+    /**
+     * Crea un trabajador sin nominas, turnos ni contratos para validar el flujo de eliminacion.
+     */
+    private UserDocument buildDeleteTestUser(LocalDateTime now) {
+        return UserDocument.builder()
+                .id(UUID.randomUUID().toString())
+                .firstName("Prueba")
+                .lastName("Borrado")
+                .imageURL("/averonixlogo.png")
+                .email(DELETE_TEST_USER_EMAIL)
+                .dni("44556677F")
+                .role(UserRole.WORKER)
+                .hospitalId(hospitalId)
+                .hospitalName("Hospital Reina Sofia")
+                .department("Pruebas")
+                .jobTitle("Trabajador de prueba")
+                .baseSalary(1500.0)
+                .password(passwordService.encode("worker123"))
+                .enabled(true)
+                .accountNonLocked(true)
+                .calendarEvents(new ArrayList<>())
+                .leaveRequestIds(new ArrayList<>())
+                .createdAt(now.toString())
+                .updatedAt(now.toString())
+                .build();
     }
 
     /**

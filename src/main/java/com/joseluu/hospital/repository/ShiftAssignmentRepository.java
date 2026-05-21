@@ -12,4 +12,5 @@ public interface ShiftAssignmentRepository extends MongoRepository<ShiftAssignme
     List<ShiftAssignmentDocument> findByWorkerIdAndStatus(String workerId, ShiftAssignmentStatus status);
     List<ShiftAssignmentDocument> findByHospitalIdAndStartAtBetween(String hospitalId, String startAt, String endAt);
     List<ShiftAssignmentDocument> findByWorkerIdAndStartAtBetween(String workerId, String startAt, String endAt);
+    void deleteByHospitalId(String hospitalId);
 }

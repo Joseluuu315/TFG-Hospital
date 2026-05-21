@@ -204,7 +204,7 @@ export default function WorkersPage() {
     setIsSubmitting(true);
     try {
       await usersApi.create(buildWorkerPayload(true));
-      toast.success('Trabajador creado correctamente y credenciales enviadas por correo');
+      toast.success('Trabajador creado correctamente');
       closeCreateDialog();
       await fetchWorkers();
     } catch (error) {
@@ -258,15 +258,18 @@ export default function WorkersPage() {
       toast.success('Eliminado correctamente');
     } catch (error: any) {
       const statusCode = error.response?.status;
+      const serverMessage = error.response?.data?.message;
       console.error('Status Code:', statusCode);
       console.error('Error Full:', error);
 
-      if (statusCode === 500) {
-        toast.error('Error de servidor: Probablemente el usuario tiene datos vinculados (fichajes, contratos antiguos o logs) que no ves.');
+      if (serverMessage) {
+        toast.error(serverMessage);
+      } else if (statusCode === 500) {
+        toast.error('Error de servidor al eliminar el trabajador.');
       } else if (statusCode === 403) {
         toast.error('No tienes permisos suficientes para borrar trabajadores.');
       } else {
-        toast.error('No se pudo eliminar. Intenta desactivarlo (Dar de baja) en su lugar.');
+        toast.error('No se pudo eliminar el trabajador.');
       }
     } finally {
       setIsSubmitting(false);
@@ -347,7 +350,7 @@ export default function WorkersPage() {
   const handlePasswordChange = (value: string, isEditMode: boolean) => {
     updateForm('password', value);
 
-    if (isEditMode && value === '') {
+    if (value === '') {
       setPasswordError('');
       return;
     }
@@ -447,8 +450,25 @@ export default function WorkersPage() {
                 )}
               </div>
           ) : (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                El sistema generara una contrasena temporal y enviara las credenciales al correo del trabajador.
+              <div>
+                <FieldLabel htmlFor="password">Contrasena inicial</FieldLabel>
+                <Input
+                    id="password"
+                    type="password"
+                    value={formData.password}
+                    onChange={(event) => handlePasswordChange(event.target.value, isEditMode)}
+                    placeholder="Opcional, recomendable para demo"
+                    className={passwordError ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                />
+                {passwordError ? (
+                    <p style={{ color: 'red', fontSize: '12px', marginTop: '5px' }}>
+                      {passwordError}
+                    </p>
+                ) : (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Si lo dejas vacio, el sistema generara una temporal y enviara correo si esta configurado.
+                    </p>
+                )}
               </div>
           )}
         </Field>
@@ -535,7 +555,7 @@ export default function WorkersPage() {
                   <Button type="button" variant="outline" onClick={closeCreateDialog}>
                     Cancelar
                   </Button>
-                  <Button type="submit" disabled={isSubmitting}>
+                  <Button type="submit" disabled={isSubmitting || !!passwordError}>
                     {isSubmitting ? <Spinner className="mr-2 h-4 w-4" /> : null}
                     Crear trabajador
                   </Button>

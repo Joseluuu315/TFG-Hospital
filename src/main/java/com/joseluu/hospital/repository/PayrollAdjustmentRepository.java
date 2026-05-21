@@ -8,4 +8,6 @@ import java.util.List;
 public interface PayrollAdjustmentRepository extends MongoRepository<PayrollAdjustmentDocument, String> {
     List<PayrollAdjustmentDocument> findByWorkerIdAndPeriod(String workerId, String period);
     List<PayrollAdjustmentDocument> findByHospitalIdAndPeriod(String hospitalId, String period);
+    void deleteByWorkerId(String workerId);
+    void deleteByHospitalId(String hospitalId);
 }

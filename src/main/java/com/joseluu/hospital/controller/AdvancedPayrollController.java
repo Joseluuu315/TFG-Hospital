@@ -5,8 +5,11 @@ import com.joseluu.hospital.dto.PayrollAdjustmentDto;
 import com.joseluu.hospital.dto.PayrollDto;
 import com.joseluu.hospital.dto.PayrollItemDto;
 import com.joseluu.hospital.dto.UserDto;
+import com.joseluu.hospital.entity.enums.UserRole;
+import com.joseluu.hospital.exception.ForbiddenException;
 import com.joseluu.hospital.service.AdvancedPayrollService;
 import com.joseluu.hospital.service.AuthService;
+import com.joseluu.hospital.service.PayrollService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -24,10 +27,14 @@ import java.util.List;
 public class AdvancedPayrollController {
     private final AdvancedPayrollService advancedPayrollService;
     private final AuthService authService;
+    private final PayrollService payrollService;
 
-    public AdvancedPayrollController(AdvancedPayrollService advancedPayrollService, AuthService authService) {
+    public AdvancedPayrollController(AdvancedPayrollService advancedPayrollService,
+                                     AuthService authService,
+                                     PayrollService payrollService) {
         this.advancedPayrollService = advancedPayrollService;
         this.authService = authService;
+        this.payrollService = payrollService;
     }
 
     /**
@@ -41,6 +48,7 @@ public class AdvancedPayrollController {
                                @PathVariable String hospitalId,
                                @Valid @RequestBody GeneratePayrollRequestDto request) {
         UserDto actor = authService.getUserFromBearer(authorization);
+        assertCanAccessHospital(actor, hospitalId);
         return advancedPayrollService.generate(hospitalId, request.getWorkerId(), request.getPeriod(), actor.getId());
     }
 
@@ -51,7 +59,10 @@ public class AdvancedPayrollController {
     @Operation(summary = "Lineas de una nomina", description = "Devuelve el desglose de conceptos de una nomina.")
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/api/payrolls/{payrollId}/items")
-    public List<PayrollItemDto> getItems(@PathVariable String payrollId) {
+    public List<PayrollItemDto> getItems(@RequestHeader(name = "Authorization", required = false) String authorization,
+                                         @PathVariable String payrollId) {
+        PayrollDto payroll = payrollService.getById(payrollId);
+        assertCanAccessPayroll(authService.getUserFromBearer(authorization), payroll);
         return advancedPayrollService.getItems(payrollId);
     }
 
@@ -62,7 +73,35 @@ public class AdvancedPayrollController {
     @Operation(summary = "Crear ajuste de nomina", description = "Aplica una bonificacion o deduccion manual a una nomina.")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @PostMapping("/api/payroll-adjustments")
-    public PayrollAdjustmentDto createAdjustment(@RequestBody PayrollAdjustmentDto request) {
+    public PayrollAdjustmentDto createAdjustment(@RequestHeader(name = "Authorization", required = false) String authorization,
+                                                 @RequestBody PayrollAdjustmentDto request) {
+        assertCanAccessHospital(authService.getUserFromBearer(authorization), request.getHospitalId());
         return advancedPayrollService.createAdjustment(request);
+    }
+
+    private void assertCanAccessPayroll(UserDto actor, PayrollDto payroll) {
+        if (actor.getRole() == UserRole.ROOT) {
+            return;
+        }
+        if (actor.getRole() == UserRole.HOSPITAL_ADMIN) {
+            assertCanAccessHospital(actor, payroll.getHospitalId());
+            return;
+        }
+        if (actor.getRole() == UserRole.WORKER && actor.getId().equals(payroll.getWorkerId())) {
+            return;
+        }
+        throw new ForbiddenException("No puedes acceder a esta nomina");
+    }
+
+    private void assertCanAccessHospital(UserDto actor, String hospitalId) {
+        if (actor.getRole() == UserRole.ROOT) {
+            return;
+        }
+        if (actor.getRole() == UserRole.HOSPITAL_ADMIN
+                && actor.getHospitalId() != null
+                && actor.getHospitalId().equals(hospitalId)) {
+            return;
+        }
+        throw new ForbiddenException("No puedes gestionar nominas de este hospital");
     }
 }

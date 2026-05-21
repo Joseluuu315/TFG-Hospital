@@ -5,6 +5,8 @@ import com.joseluu.hospital.dto.ManualShiftRequestDto;
 import com.joseluu.hospital.dto.ShiftAssignmentDto;
 import com.joseluu.hospital.dto.ShiftRequirementDto;
 import com.joseluu.hospital.dto.UserDto;
+import com.joseluu.hospital.entity.enums.UserRole;
+import com.joseluu.hospital.exception.ForbiddenException;
 import com.joseluu.hospital.service.AuthService;
 import com.joseluu.hospital.service.SchedulingService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,8 +40,10 @@ public class SchedulingController {
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
     @PostMapping("/api/hospitals/{hospitalId}/shift-requirements")
     public ShiftRequirementDto createRequirement(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable String hospitalId,
             @Valid @RequestBody ShiftRequirementDto request) {
+        assertCanAccessHospital(authService.getUserFromBearer(authorization), hospitalId);
         return schedulingService.createRequirement(hospitalId, request);
     }
 
@@ -51,9 +55,11 @@ public class SchedulingController {
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/api/hospitals/{hospitalId}/shift-requirements")
     public List<ShiftRequirementDto> getRequirements(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable String hospitalId,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate) {
+        assertCanAccessHospital(authService.getUserFromBearer(authorization), hospitalId);
         return schedulingService.getRequirementsForHospital(hospitalId, startDate, endDate);
     }
 
@@ -69,6 +75,7 @@ public class SchedulingController {
             @PathVariable String hospitalId,
             @PathVariable String requirementId) {
         UserDto actor = authService.getUserFromBearer(authorization);
+        assertCanAccessHospital(actor, hospitalId);
         schedulingService.deleteRequirement(hospitalId, actor.getId(), requirementId);
         return ResponseEntity.noContent().build();
     }
@@ -85,6 +92,7 @@ public class SchedulingController {
             @PathVariable String hospitalId,
             @Valid @RequestBody AutoAssignShiftsRequestDto request) {
         UserDto actor = authService.getUserFromBearer(authorization);
+        assertCanAccessHospital(actor, hospitalId);
         return schedulingService.autoAssign(
                 hospitalId, actor.getId(), request.getStartDate(), request.getEndDate());
     }
@@ -101,6 +109,7 @@ public class SchedulingController {
             @PathVariable String hospitalId,
             @Valid @RequestBody ManualShiftRequestDto request) {
         UserDto actor = authService.getUserFromBearer(authorization);
+        assertCanAccessHospital(actor, hospitalId);
         return schedulingService.manualAssign(hospitalId, actor.getId(), request);
     }
 
@@ -111,9 +120,11 @@ public class SchedulingController {
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/api/hospitals/{hospitalId}/shifts")
     public List<ShiftAssignmentDto> getAssignments(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable String hospitalId,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate) {
+        assertCanAccessHospital(authService.getUserFromBearer(authorization), hospitalId);
         return schedulingService.getAssignmentsForHospital(hospitalId, startDate, endDate);
     }
 
@@ -129,6 +140,7 @@ public class SchedulingController {
             @PathVariable String hospitalId,
             @PathVariable String shiftId) {
         UserDto actor = authService.getUserFromBearer(authorization);
+        assertCanAccessHospital(actor, hospitalId);
         schedulingService.cancelAssignment(hospitalId, actor.getId(), shiftId);
         return ResponseEntity.noContent().build();
     }
@@ -143,5 +155,15 @@ public class SchedulingController {
             @RequestHeader(name = "Authorization", required = false) String authorization) {
         UserDto actor = authService.getUserFromBearer(authorization);
         return schedulingService.getAssignmentsForWorker(actor.getId());
+    }
+
+    private void assertCanAccessHospital(UserDto actor, String hospitalId) {
+        if (actor.getRole() == UserRole.ROOT) {
+            return;
+        }
+        if (actor.getHospitalId() != null && actor.getHospitalId().equals(hospitalId)) {
+            return;
+        }
+        throw new ForbiddenException("No puedes acceder a operaciones de este hospital");
     }
 }
