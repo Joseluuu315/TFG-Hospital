@@ -70,9 +70,9 @@ public class AdvancedPayrollController {
      * Crea un ajuste manual de bonificacion o penalizacion.
      * Solo HOSPITAL_ADMIN o ROOT.
      */
-    @Operation(summary = "Crear ajuste de nomina", description = "Aplica una bonificacion o deduccion manual a una nomina.")
+    @Operation(summary = "Crear ajuste de nominas", description = "Aplica una bonificacion o deduccion manual a una nomina.")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
-    @PostMapping("/api/payroll-adjustments")
+    @PutMapping("/api/payroll-adjustments")
     public PayrollAdjustmentDto createAdjustment(@RequestHeader(name = "Authorization", required = false) String authorization,
                                                  @RequestBody PayrollAdjustmentDto request) {
         assertCanAccessHospital(authService.getUserFromBearer(authorization), request.getHospitalId());

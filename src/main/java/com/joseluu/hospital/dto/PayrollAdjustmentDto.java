@@ -1,11 +1,15 @@
 package com.joseluu.hospital.dto;
 
 import com.joseluu.hospital.entity.enums.PayrollAdjustmentType;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class PayrollAdjustmentDto {
     private String id;
     private String hospitalId;

@@ -482,9 +482,11 @@ export const payrollsApi = {
 
 export const advancedPayrollApi = {
   generate: (hospitalId: string, data: { workerId: string; period: string }) =>
-    api.post<Payroll>(`/hospitals/${hospitalId}/payrolls/generate`, data),
-  getItems: (payrollId: string) => api.get<PayrollItem[]>(`/payrolls/${payrollId}/items`),
-  createAdjustment: (data: PayrollAdjustment) => api.post<PayrollAdjustment>('/payroll-adjustments', data),
+      api.post<Payroll>(`/hospitals/${hospitalId}/payrolls/generate`, data),  // post, no put
+  getItems: (payrollId: string) =>
+      api.get<PayrollItem[]>(`/payrolls/${payrollId}/items`),
+  createAdjustment: (data: PayrollAdjustment) =>
+      api.put<PayrollAdjustment>('/payroll-adjustments', data),  // post, no put
 };
 
 export const auditLogsApi = {
