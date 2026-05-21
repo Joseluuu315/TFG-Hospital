@@ -102,7 +102,7 @@ public class PayrollsController {
      * Solo HOSPITAL_ADMIN o ROOT.
      */
     @Operation(summary = "Actualizar estado de nomina")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','ROOT')")
+    @PreAuthorize("isAuthenticated()")
     @PatchMapping("/{id}/status")
     public PayrollDto updateStatus(@RequestHeader(name = "Authorization", required = false) String authorization,
                                    @PathVariable String id,
